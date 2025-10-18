@@ -39,6 +39,17 @@ PG = {
     "user": "postgres",
     "password": "postgres",
 }
+
+# Database credentials used by psycopg2 and ogr2ogr. Keep separate so both
+# the Python DB connection and the ogr2ogr PG: connection string use the
+# same values and can be changed in one place.
+DB_CRED = {
+    "host": PG["host"],
+    "port": PG["port"],
+    "dbname": "block-county",
+    "user": "block-county",  # must be superuser or have needed privileges
+    "password": "your_password_here",
+}
 SCHEMA = "public"
 BLOCK_TABLE = "de_blocks_2020"
 POP_TABLE = "de_block_pop_2020"
@@ -61,12 +72,13 @@ PL_API_PARAMS = {
 # Helpers
 # ----------------------------
 def psql_conn():
+    # Use DB_CRED for connection parameters
     return psycopg2.connect(
-        host=PG["host"],
-        port=PG["port"],
-        dbname="block-county",
-        user="block-county", #must be superuser
-        password="your_password_here",
+        host=DB_CRED["host"],
+        port=DB_CRED["port"],
+        dbname=DB_CRED["dbname"],
+        user=DB_CRED["user"],
+        password=DB_CRED["password"],
     )
 
 def run_ogr2ogr(shp_path, table_fullname, epsg_target):
@@ -77,11 +89,16 @@ def run_ogr2ogr(shp_path, table_fullname, epsg_target):
     -nln sets output table name.
     -progress for feedback.
     """
+    # Build the ogr2ogr PostgreSQL connection string from DB_CRED
+    pg_conn = (
+        f"PG:host={DB_CRED['host']} port={DB_CRED['port']} dbname={DB_CRED['dbname']} "
+        f"user={DB_CRED['user']} password={DB_CRED['password']}"
+    )
     cmd = [
         "ogr2ogr",
         "-overwrite",
         "-f", "PostgreSQL",
-        f"PG:host={PG['host']} port={PG['port']} dbname={PG['dbname']} user={PG['user']} password={PG['password']}",
+        pg_conn,
         shp_path,
         "-nln", table_fullname,
         "-lco", "GEOMETRY_NAME=geom",
