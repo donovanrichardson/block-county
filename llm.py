@@ -140,17 +140,13 @@ def create_block_indexes():
         """)
         # Drop any existing PK if re-running
         cur.execute(f"""
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM pg_constraint
-                    WHERE conrelid = '{tbl}'::regclass
-                      AND contype = 'p'
-                ) THEN
-                    ALTER TABLE {tbl} DROP CONSTRAINT (SELECT conname FROM pg_constraint WHERE conrelid = '{tbl}'::regclass AND contype='p' LIMIT 1);
-                END IF;
-            END$$;
+            SELECT conname FROM pg_constraint
+            WHERE conrelid = '{tbl}'::regclass AND contype = 'p'
         """)
+        row = cur.fetchone()
+        if row:
+            pk_name = row[0]
+            cur.execute(f'ALTER TABLE {tbl} DROP CONSTRAINT {pk_name};')
         # Add PK on geoid20
         cur.execute(f"""
             ALTER TABLE {tbl}
@@ -175,13 +171,27 @@ def create_block_indexes():
         """)
         conn.commit()
 
-def fetch_block_population():
+def get_county_codes():
     """
-    Pull block-level population from the 2020 DEC/PL API for Delaware.
+    Query the database for all distinct county codes in Delaware.
+    Returns a list of countyfp20 strings.
+    """
+    with psql_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE};")
+        return [row[0] for row in cur.fetchall()]
+
+def fetch_block_population(county_code):
+    """
+    Pull block-level population from the 2020 DEC/PL API for Delaware for a specific county.
     We construct geoid20 = state + county + tract + block and store P1_001N as pop.
     """
-    print("Fetching block-level population from 2020 DEC/PL API for Delaware…")
-    r = requests.get(PL_API_URL, params=PL_API_PARAMS, timeout=120)
+    print(f"Fetching block-level population for county {county_code} from 2020 DEC/PL API…")
+    params = {
+        "get": "NAME,P1_001N",
+        "for": "block:*",
+        "in": f"state:10+county:{county_code}",
+    }
+    r = requests.get(PL_API_URL, params=params, timeout=120)
     r.raise_for_status()
     rows = r.json()  # first row is header
     header = rows[0]
@@ -193,12 +203,11 @@ def fetch_block_population():
     idx_block = header.index("block")
 
     data = []
-    for row in tqdm(rows[1:], desc="Processing population records", unit="block"):
+    for row in tqdm(rows[1:], desc=f"Processing population records for county {county_code}", unit="block"):
         state = row[idx_state]
         county = row[idx_county]
         tract = row[idx_tract]
         block = row[idx_block]
-        # Construct 2020 block GEOID20 = state(2) + county(3) + tract(6) + block(4)
         geoid20 = f"{state}{county}{tract}{block}"
         pop = int(row[idx_pop])
         data.append((geoid20, pop))
@@ -293,12 +302,17 @@ def main():
         # 4) Create PK + indexes with comments
         create_block_indexes()
 
-        # 5) Fetch population and load into PostGIS
-        print("Fetching block-level population from 2020 DEC/PL API for Delaware…")
-        pop_rows = fetch_block_population()
-        print(f"Fetched {len(pop_rows):,} block population records.")
+        # 5) Fetch population and load into PostGIS for all counties
+        print("Getting all Delaware county codes from block geometry table…")
+        county_codes = get_county_codes()
+        print(f"Found counties: {county_codes}")
+        all_pop_rows = []
+        for county_code in county_codes:
+            pop_rows = fetch_block_population(county_code)
+            all_pop_rows.extend(pop_rows)
+        print(f"Fetched {len(all_pop_rows):,} block population records across all counties.")
         print("Loading population data into PostGIS…")
-        inserted, elapsed = load_population_table(pop_rows)
+        inserted, elapsed = load_population_table(all_pop_rows)
         print("Population data loaded.")
         print(f"Records inserted: {inserted:,}")
         print(f"Time elapsed: {elapsed:.2f} seconds")
