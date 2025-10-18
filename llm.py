@@ -191,7 +191,10 @@ def load_population_table(pop_rows):
     """
     Create/replace the population table and load values.
     Also add PK + BTREE index with rationale.
+    Returns the number of records inserted and time elapsed in seconds.
     """
+    import time
+    start_time = time.time()
     with psql_conn() as conn, conn.cursor() as cur:
         tbl = f"{SCHEMA}.{POP_TABLE}"
         cur.execute(f"DROP TABLE IF EXISTS {tbl};")
@@ -207,6 +210,7 @@ def load_population_table(pop_rows):
         # Bulk insert with tqdm progress
         chunk_size = 10000
         total = len(pop_rows)
+        inserted = 0
         for i in tqdm(range(0, total, chunk_size), desc="Inserting population rows", unit="block"):
             chunk = pop_rows[i:i+chunk_size]
             execute_values(
@@ -215,6 +219,7 @@ def load_population_table(pop_rows):
                 chunk,
                 page_size=chunk_size
             )
+            inserted += len(chunk)
         # Additional index is not strictly necessary since PK already covers equality joins,
         # but add a short explanation comment via the PK.
         cur.execute(f"""
@@ -222,6 +227,8 @@ def load_population_table(pop_rows):
             IS 'PRIMARY KEY on geoid20: supports fast equality joins to block geometry by unique block identifier.';
         """)
         conn.commit()
+    elapsed = time.time() - start_time
+    return inserted, elapsed
 
 def download_with_progress(url, dest_path):
     """
@@ -274,8 +281,10 @@ def main():
         pop_rows = fetch_block_population()
         print(f"Fetched {len(pop_rows):,} block population records.")
         print("Loading population data into PostGIS…")
-        load_population_table(pop_rows)
+        inserted, elapsed = load_population_table(pop_rows)
         print("Population data loaded.")
+        print(f"Records inserted: {inserted:,}")
+        print(f"Time elapsed: {elapsed:.2f} seconds")
 
         print("\nDone ✅")
         print(f"- Geometry table: {SCHEMA}.{BLOCK_TABLE}")
