@@ -275,6 +275,7 @@ def download_with_progress(url, dest_path):
             bar.update(size)
 
 def main():
+    start_time = time.time()  # Track total elapsed time
     ensure_schema_and_extensions()
 
     tmpdir = tempfile.mkdtemp(prefix="de_blocks_")
@@ -312,10 +313,12 @@ def main():
             all_pop_rows.extend(pop_rows)
         print(f"Fetched {len(all_pop_rows):,} block population records across all counties.")
         print("Loading population data into PostGIS…")
-        inserted, elapsed = load_population_table(all_pop_rows)
+        inserted, _ = load_population_table(all_pop_rows)
         print("Population data loaded.")
         print(f"Records inserted: {inserted:,}")
-        print(f"Time elapsed: {elapsed:.2f} seconds")
+
+        total_elapsed = time.time() - start_time
+        print(f"Total time elapsed: {total_elapsed:.2f} seconds")
 
         print("\nDone ✅")
         print(f"- Geometry table: {SCHEMA}.{BLOCK_TABLE}")
