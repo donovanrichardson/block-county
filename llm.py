@@ -176,7 +176,7 @@ def fetch_block_population():
     idx_block = header.index("block")
 
     data = []
-    for row in rows[1:]:
+    for row in tqdm(rows[1:], desc="Processing population records", unit="block"):
         state = row[idx_state]
         county = row[idx_county]
         tract = row[idx_tract]
@@ -204,13 +204,17 @@ def load_population_table(pop_rows):
             COMMENT ON COLUMN {tbl}.geoid20 IS 'Census Block GEOID20 (state+county+tract+block)';
             COMMENT ON COLUMN {tbl}.pop IS 'Total population (P1_001N) from 2020 DEC/PL.';
         """)
-        # Bulk insert
-        execute_values(
-            cur,
-            f"INSERT INTO {tbl} (geoid20, pop) VALUES %s ON CONFLICT (geoid20) DO UPDATE SET pop = EXCLUDED.pop",
-            pop_rows,
-            page_size=10000
-        )
+        # Bulk insert with tqdm progress
+        chunk_size = 10000
+        total = len(pop_rows)
+        for i in tqdm(range(0, total, chunk_size), desc="Inserting population rows", unit="block"):
+            chunk = pop_rows[i:i+chunk_size]
+            execute_values(
+                cur,
+                f"INSERT INTO {tbl} (geoid20, pop) VALUES %s ON CONFLICT (geoid20) DO UPDATE SET pop = EXCLUDED.pop",
+                chunk,
+                page_size=chunk_size
+            )
         # Additional index is not strictly necessary since PK already covers equality joins,
         # but add a short explanation comment via the PK.
         cur.execute(f"""
