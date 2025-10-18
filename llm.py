@@ -64,9 +64,9 @@ def psql_conn():
     return psycopg2.connect(
         host=PG["host"],
         port=PG["port"],
-        dbname=PG["dbname"],
-        user=PG["user"],
-        password=PG["password"],
+        dbname="block-county",
+        user="block-county", #must be superuser
+        password="your_password_here",
     )
 
 def run_ogr2ogr(shp_path, table_fullname, epsg_target):
