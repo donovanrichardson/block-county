@@ -29,6 +29,8 @@ import psycopg2
 from psycopg2.extras import execute_values
 from tqdm import tqdm
 
+import county_pop_weighted_centroid  # Import the centroid calculation script
+
 # ----------------------------
 # CONFIG — edit as needed
 # ----------------------------
@@ -374,6 +376,11 @@ FROM {SCHEMA}.{BLOCK_TABLE} b
 JOIN {SCHEMA}.{POP_TABLE} p USING (geoid20)
 LIMIT 5;
 """)
+
+        # --- Call county_pop_weighted_centroid.main() to compute centroids after import ---
+        print("\nComputing population-weighted county centroids...")
+        county_pop_weighted_centroid.main()
+        print("County centroids computation complete.")
 
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
