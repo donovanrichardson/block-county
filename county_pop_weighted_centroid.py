@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compute population-weighted centroid for each Delaware county using block-level population and geometry.
+Compute population-weighted centroid for each county using block-level population and geometry.
 
 Connects to the same database as block_import.py.
 """
@@ -20,7 +20,9 @@ SCHEMA = "public"
 BLOCK_TABLE = "blocks_2020"
 POP_TABLE = "block_pop_2020"
 
-SQL = f"""
+# --- Only process counties missing a centroid ---
+# This query will be built dynamically to only include counties not yet in the centroid table.
+SQL_TEMPLATE = """
 WITH weighted AS (
   SELECT
     b.countyfp20,
@@ -28,8 +30,9 @@ WITH weighted AS (
     SUM(ST_X(ST_Centroid(b.geom)) * p.pop)::float AS weighted_x,
     SUM(ST_Y(ST_Centroid(b.geom)) * p.pop)::float AS weighted_y,
     SUM(p.pop) AS pop
-  FROM {SCHEMA}.{BLOCK_TABLE} b
-  JOIN {SCHEMA}.{POP_TABLE} p ON b.geoid20 = p.geoid20
+  FROM {schema}.{block} b
+  JOIN {schema}.{pop} p ON b.geoid20 = p.geoid20
+  WHERE b.countyfp20 IN ({placeholders})
   GROUP BY b.countyfp20
 )
 SELECT
@@ -41,6 +44,7 @@ SELECT
 FROM weighted
 ORDER BY countyfp20;
 """
+
 
 def main():
     print("Connecting to database...")
@@ -56,8 +60,30 @@ def main():
             );
         """)
         conn.commit()
-        print("Calculating population-weighted centroids and populations for each county...")
-        cur.execute(SQL)
+
+        # --- Find counties missing a centroid ---
+        # Only process counties not yet in the centroid table
+        print("Checking for counties with missing centroids...")
+        cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE} b WHERE MIN(LEFT(b.geoid20, 5)) NOT IN (SELECT county_geoid FROM {SCHEMA}.{table_name});")
+        missing_counties = [row[0] for row in cur.fetchall()]
+        # Comment: Only counties not present in county_centroids2 will be processed
+        if not missing_counties:
+            print("All counties already have centroids in the table. Nothing to do.")
+            conn.close()
+            return
+
+        print(f"Found {len(missing_counties)} counties missing centroids: {missing_counties}")
+
+        # --- Build parameterized query for missing counties ---
+        placeholders = ",".join(["%s"] * len(missing_counties))
+        sql = SQL_TEMPLATE.format(
+            schema=SCHEMA,
+            block=BLOCK_TABLE,
+            pop=POP_TABLE,
+            placeholders=placeholders,
+        )
+        print("Calculating population-weighted centroids and populations for missing counties...")
+        cur.execute(sql, missing_counties)
         results = cur.fetchall()
         print(f"Inserting/updating {len(results)} county centroids...")
         for row in tqdm(results, desc="Saving centroids", unit="county"):
@@ -80,3 +106,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+# --- End of script ---
+# Comments added to explain changes: Only counties missing a centroid are processed, using a parameterized query for safety and efficiency.
