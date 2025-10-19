@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Download Delaware 2020 census blocks, load to PostGIS, then fetch 2020 PL block population and load to a joinable table.
+Download 2020 census blocks, load to PostGIS, then fetch 2020 PL block population and load to a joinable table.
 
 Tables created:
-  - public.de_blocks_2020 (geometry + TIGER attributes; PK = geoid20)
-  - public.de_block_pop_2020 (geoid20, pop)
+  - public.blocks_2020 (geometry + TIGER attributes; PK = geoid20)
+  - public.block_pop_2020 (geoid20, pop)
 
 Join key:
   - geoid20 (state+county+tract+block; unique per block)
@@ -51,22 +51,16 @@ DB_CRED = {
     "password": "your_password_here",
 }
 SCHEMA = "public"
-BLOCK_TABLE = "de_blocks_2020"
-POP_TABLE = "de_block_pop_2020"
+BLOCK_TABLE = "blocks_2020"
+POP_TABLE = "block_pop_2020"
 # Keep native shapefile CRS (NAD83 / EPSG:4269). Change to "EPSG:5070" if you want Albers.
 TARGET_EPSG = "EPSG:4269"
 
-# Official TIGER/Line 2020 blocks for Delaware (state FIPS 10)
-TIGER_ZIP_URL = "https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/tl_2020_10_tabblock20.zip"
+
 
 # 2020 PL (DEC/PL) API: total population is P1_001N
 # We request NAME for debugging/spot checks; keys returned: NAME, P1_001N, state, county, tract, block
 PL_API_URL = "https://api.census.gov/data/2020/dec/pl"
-PL_API_PARAMS = {
-    "get": "NAME,P1_001N",
-    "for": "block:*",
-    "in": "state:10",  # Delaware
-}
 
 # ----------------------------
 # Helpers
@@ -81,7 +75,7 @@ def psql_conn():
         password=DB_CRED["password"],
     )
 
-def run_ogr2ogr(shp_path, table_fullfdename, epsg_target):
+def run_ogr2ogr(shp_path, table_fullname, epsg_target):
     """
     Load shapefile into PostGIS using ogr2ogr.
     -nlt MULTIPOLYGON because blocks are polygons; TIGER block geometries are polygons/multipolygons.
@@ -130,7 +124,6 @@ def create_block_indexes():
     - BTREE on (countyfp20, tractce20):
         * Common filter/group-by dimensions when working within a county or tract; improves planner choices for those queries.
     """
-    # LLM DO NOT DELETE TODO ALSO CREATE INDEX ON blockce20 and aland20
     with psql_conn() as conn, conn.cursor() as cur:
         tbl = f"{SCHEMA}.{BLOCK_TABLE}"
         # Some TIGER fields are fixed-width text; ensure the key column exists in the imported schema.
@@ -188,23 +181,23 @@ def create_block_indexes():
 
 def get_county_codes():
     """
-    Query the database for all distinct county codes in Delaware.
+    Query the database for all distinct county codes in Delaware.  # TODO: docstring mentions Delaware, should be generic
     Returns a list of countyfp20 strings.
     """
     with psql_conn() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE};")
+        cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE} bt where not exists (select * from {SCHEMA}.{POP_TABLE} pt where bt.geoid20 = pt.geoid20);") #LLM DO NOT DELETE; INTEGER CANNOT BE NULL SO I WILL NOT NULLCHECK
         return [row[0] for row in cur.fetchall()]
 
-def fetch_block_population(county_code):
+def fetch_block_population(county_code, fips):
     """
-    Pull block-level population from the 2020 DEC/PL API for Delaware for a specific county.
+    Pull block-level population from the 2020 DEC/PL API for a specific county in a specific state.  
     We construct geoid20 = state + county + tract + block and store P1_001N as pop.
     """
     print(f"Fetching block-level population for county {county_code} from 2020 DEC/PL API…")
     params = {
         "get": "NAME,P1_001N",
         "for": "block:*",
-        "in": f"state:10+county:{county_code}",
+        "in": f"state:{fips}+county:{county_code}",
     }
     r = requests.get(PL_API_URL, params=params, timeout=120)
     r.raise_for_status()
@@ -244,7 +237,7 @@ def load_population_table(pop_rows):
                 geoid20 text PRIMARY KEY,
                 pop integer NOT NULL
             );
-            COMMENT ON TABLE {tbl} IS '2020 PL (DEC/PL) total population (P1_001N) at block level for Delaware; keyed by geoid20 for joins to de_blocks_2020.';
+            COMMENT ON TABLE {tbl} IS '2020 PL (DEC/PL) total population (P1_001N) at block level for each state; keyed by geoid20 for joins to de_blocks_2020.';
             COMMENT ON COLUMN {tbl}.geoid20 IS 'Census Block GEOID20 (state+county+tract+block)';
             COMMENT ON COLUMN {tbl}.pop IS 'Total population (P1_001N) from 2020 DEC/PL.';
         """)
@@ -307,11 +300,16 @@ def main():
     start_time = time.time()  # Track total elapsed time
     ensure_schema_and_extensions()
 
-    tmpdir = tempfile.mkdtemp(prefix="de_blocks_")
+    fips = 10# TODO: state-specific fips, currently hardcoded for Delaware
+    # Official TIGER/Line 2020 blocks
+    footer = f"tl_2020_{fips}_tabblock20.zip"
+    TIGER_ZIP_URL = f"https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/{footer}"  
+
+    tmpdir = tempfile.mkdtemp(prefix="state_blocks_")
     try:
         # 1) Download shapefile zip
         print("Downloading:", TIGER_ZIP_URL)
-        zpath = Path(tmpdir) / "tl_2020_10_tabblock20.zip"
+        zpath = Path(tmpdir) / footer 
         download_with_progress(TIGER_ZIP_URL, zpath)
 
         # 2) Unzip
@@ -333,14 +331,14 @@ def main():
         create_block_indexes()
 
         # 5) Fetch population and load into PostGIS for all counties
-        print("Getting all Delaware county codes from block geometry table…")
+        print("Getting all state county codes from block geometry table…")
         county_codes = get_county_codes()
         print(f"Found counties: {county_codes}")
         all_pop_rows = []
         for county_code in county_codes:
-            pop_rows = fetch_block_population(county_code)
+            pop_rows = fetch_block_population(county_code, fips)
             all_pop_rows.extend(pop_rows)
-        print(f"Fetched {len(all_pop_rows):,} block population records across all counties.")
+        print(f"Fetched {len(all_pop_rows):,} block population records across all counties in state.")
         print("Loading population data into PostGIS…")
         inserted, _ = load_population_table(all_pop_rows)
         print("Population data loaded.")
