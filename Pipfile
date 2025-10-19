@@ -7,6 +7,13 @@ name = "pypi"
 requests = "*"
 psycopg2-binary = "*"
 tqdm = "*"
+geopandas = "*"
+pandas = "*"
+shapely = "*"
+matplotlib = "*"
+fiona = "*"
+pyproj = "*"
+rtree = "*"
 
 [dev-packages]
 
