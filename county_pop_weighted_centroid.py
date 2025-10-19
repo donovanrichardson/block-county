@@ -64,8 +64,13 @@ def main():
         # --- Find counties missing a centroid ---
         # Only process counties not yet in the centroid table
         print("Checking for counties with missing centroids...")
-        cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE} b WHERE MIN(LEFT(b.geoid20, 5)) NOT IN (SELECT county_geoid FROM {SCHEMA}.{table_name});")
-        missing_counties = [row[0] for row in cur.fetchall()]
+        cur.execute(f'''
+            SELECT countyfp20, MIN(LEFT(geoid20, 5)) AS county_geoid
+            FROM {SCHEMA}.{BLOCK_TABLE}
+            GROUP BY countyfp20
+            HAVING MIN(LEFT(geoid20, 5)) NOT IN (SELECT county_geoid FROM {SCHEMA}.{table_name})
+        ''')
+        missing_counties = [row['countyfp20'] for row in cur.fetchall()]
         # Comment: Only counties not present in county_centroids2 will be processed
         if not missing_counties:
             print("All counties already have centroids in the table. Nothing to do.")
