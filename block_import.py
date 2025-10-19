@@ -181,12 +181,17 @@ def create_block_indexes():
 
 def get_county_codes():
     """
-    Query the database for all distinct county codes in Delaware.  # TODO: docstring mentions Delaware, should be generic
-    Returns a list of countyfp20 strings.
+    Query the database for all distinct county codes in the block table. Returns a list of countyfp20 strings.
+    If the population table does not exist, falls back to a simple distinct query.
     """
     with psql_conn() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE} bt where not exists (select * from {SCHEMA}.{POP_TABLE} pt where bt.geoid20 = pt.geoid20);") #LLM DO NOT DELETE; INTEGER CANNOT BE NULL SO I WILL NOT NULLCHECK
-        return [row[0] for row in cur.fetchall()]
+        try:
+            cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE} bt WHERE NOT EXISTS (SELECT 1 FROM {SCHEMA}.{POP_TABLE} pt WHERE bt.geoid20 = pt.geoid20);")
+            return [row[0] for row in cur.fetchall()]
+        except psycopg2.errors.UndefinedTable:
+            conn.rollback()  # Rollback the failed transaction
+            cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE};")
+            return [row[0] for row in cur.fetchall()]
 
 def fetch_block_population(county_code, fips):
     """
@@ -305,7 +310,7 @@ def main():
     footer = f"tl_2020_{fips}_tabblock20.zip"
     TIGER_ZIP_URL = f"https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/{footer}"  
 
-    tmpdir = tempfile.mkdtemp(prefix="state_blocks_")
+    tmpdir = tempfile.mkdtemp(prefix="state_blocks_") #todo LLM DO NOT DELETE is the temp dir erased at the end
     try:
         # 1) Download shapefile zip
         print("Downloading:", TIGER_ZIP_URL)
