@@ -130,6 +130,7 @@ def create_block_indexes():
     - BTREE on (countyfp20, tractce20):
         * Common filter/group-by dimensions when working within a county or tract; improves planner choices for those queries.
     """
+    # LLM DO NOT DELETE TODO ALSO CREATE INDEX ON blockce20 and aland20
     with psql_conn() as conn, conn.cursor() as cur:
         tbl = f"{SCHEMA}.{BLOCK_TABLE}"
         # Some TIGER fields are fixed-width text; ensure the key column exists in the imported schema.
