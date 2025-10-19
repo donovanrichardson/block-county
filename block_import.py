@@ -92,7 +92,7 @@ def run_ogr2ogr(shp_path, table_fullname, epsg_target):
     )
     cmd = [
         "ogr2ogr",
-        "-overwrite",
+        "-append",
         "-f", "PostgreSQL",
         pg_conn,
         shp_path,
@@ -101,7 +101,7 @@ def run_ogr2ogr(shp_path, table_fullname, epsg_target):
         "-nlt", "MULTIPOLYGON",
         "-lco", "FID=gid",
         "-progress"
-    ]
+    ] #todo Warning 1: Layer creation options ignored since an existing layer is being appended to.
     if epsg_target:
         cmd += ["-t_srs", epsg_target]
 
@@ -184,7 +184,7 @@ def get_county_codes():
     """
     with psql_conn() as conn, conn.cursor() as cur:
         try:
-            cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE} bt WHERE NOT EXISTS (SELECT 1 FROM {SCHEMA}.{POP_TABLE} pt WHERE bt.geoid20 = pt.geoid20);")
+            cur.execute(f"SELECT DISTINCT countyfp20 FROM {SCHEMA}.{BLOCK_TABLE} bt WHERE NOT EXISTS (SELECT 1 FROM {SCHEMA}.{POP_TABLE} pt WHERE bt.geoid20 = pt.geoid20) order by countyfp20 desc;")
             return [row[0] for row in cur.fetchall()]
         except psycopg2.errors.UndefinedTable:
             conn.rollback()  # Rollback the failed transaction
@@ -304,82 +304,87 @@ def main():
     ensure_schema_and_extensions()
     
 # list of fips codes for all states except AK (02) and HI (15)
+#     STATE_FIPS = [
+#         "01","04","05","06","08","09","10","11","12","13",
+#         "16","17","18","19","20","21","22","23","24","25",
+#         "26","27","28","29","30","31","32","33","34","35",
+#         "36","37","38","39","40","41","42","44","45","46",
+#         "47","48","49","50","51","53","54","55","56"
+#     ]
     STATE_FIPS = [
-        "01","04","05","06","08","09","10","11","12","13",
-        "16","17","18","19","20","21","22","23","24","25",
-        "26","27","28","29","30","31","32","33","34","35",
-        "36","37","38","39","40","41","42","44","45","46",
-        "47","48","49","50","51","53","54","55","56"
+        "10","56","50"
     ]
     
     # Default state FIPS (DE = 10). Change to a single FIPS string or iterate over STATE_FIPS as needed.
-    fips = "10"  # TODO: iterate STATE_FIPS to process multiple states
+    # fips = "10"  # TODO: iterate STATE_FIPS to process multiple states
 
-    fips = 10# TODO: state-specific fips, currently hardcoded for Delaware
+    # fips = 10# TODO: state-specific fips, currently hardcoded for Delaware
     # Official TIGER/Line 2020 blocks
-    footer = f"tl_2020_{fips}_tabblock20.zip"
-    TIGER_ZIP_URL = f"https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/{footer}"  
 
-    tmpdir = tempfile.mkdtemp(prefix="state_blocks_") #todo LLM DO NOT DELETE is the temp dir erased at the end
-    try:
-        # 1) Download shapefile zip
-        print("Downloading:", TIGER_ZIP_URL)
-        zpath = Path(tmpdir) / footer 
-        download_with_progress(TIGER_ZIP_URL, zpath)
-
-        # 2) Unzip
-        print("Unzipping shapefile…")
-        with zipfile.ZipFile(zpath, "r") as zf:
-            zf.extractall(tmpdir)
-
-        # Find the .shp within the extracted files
-        shp_files = list(Path(tmpdir).glob("*.shp"))
-        if not shp_files:
-            raise RuntimeError("No .shp found after extraction.")
-        shp_path = str(shp_files[0])
-
-        # 3) Load into PostGIS via ogr2ogr
-        table_fullname = f"{SCHEMA}.{BLOCK_TABLE}"
-        run_ogr2ogr(shp_path, table_fullname, TARGET_EPSG)
-
-        # 4) Create PK + indexes with comments
-        create_block_indexes()
-
-        # 5) Fetch population and load into PostGIS for all counties
-        print("Getting all state county codes from block geometry table…")
-        county_codes = get_county_codes()
-        print(f"Found counties: {county_codes}")
-        all_pop_rows = []
-        for county_code in county_codes:
-            pop_rows = fetch_block_population(county_code, fips)
-            all_pop_rows.extend(pop_rows)
-        print(f"Fetched {len(all_pop_rows):,} block population records across all counties in state.")
-        print("Loading population data into PostGIS…")
-        inserted, _ = load_population_table(all_pop_rows)
-        print("Population data loaded.")
-        print(f"Records inserted: {inserted:,}")
-
-        total_elapsed = time.time() - start_time
-        print(f"Total time elapsed: {total_elapsed:.2f} seconds")
-
-        print("\nDone ✅")
-        print(f"- Geometry table: {SCHEMA}.{BLOCK_TABLE}")
-        print(f"- Population table: {SCHEMA}.{POP_TABLE}")
-        print("\nExample join query:")
-        print(f"""
-SELECT b.geoid20, p.pop, ST_Area(b.geom) AS area_m2
-FROM {SCHEMA}.{BLOCK_TABLE} b
-JOIN {SCHEMA}.{POP_TABLE} p USING (geoid20)
-LIMIT 5;
-""")
-
-        # --- Call county_pop_weighted_centroid.main() to compute centroids after import ---
-        print("\nComputing population-weighted county centroids...")
-        county_pop_weighted_centroid.main()
-        print("County centroids computation complete.")
-
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
+    for fips in STATE_FIPS:
+        
+        try:
+            tmpdir = tempfile.mkdtemp(prefix="state_blocks_") #todo LLM DO NOT DELETE is the temp dir erased at the end
+            footer = f"tl_2020_{fips}_tabblock20.zip"
+            TIGER_ZIP_URL = f"https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/{footer}"  
+            # 1) Download shapefile zip
+            print("Downloading:", TIGER_ZIP_URL)
+            zpath = Path(tmpdir) / footer 
+            download_with_progress(TIGER_ZIP_URL, zpath)
+    
+            # 2) Unzip
+            print("Unzipping shapefile…")
+            with zipfile.ZipFile(zpath, "r") as zf:
+                zf.extractall(tmpdir)
+    
+            # Find the .shp within the extracted files
+            shp_files = list(Path(tmpdir).glob("*.shp"))
+            if not shp_files:
+                raise RuntimeError("No .shp found after extraction.")
+            shp_path = str(shp_files[0])
+    
+            # 3) Load into PostGIS via ogr2ogr
+            table_fullname = f"{SCHEMA}.{BLOCK_TABLE}"
+            run_ogr2ogr(shp_path, table_fullname, TARGET_EPSG)
+    
+            # 4) Create PK + indexes with comments
+            create_block_indexes()
+    
+            # 5) Fetch population and load into PostGIS for all counties
+            print("Getting all state county codes from block geometry table…")
+            county_codes = get_county_codes()
+            print(f"Found counties: {county_codes}")
+            all_pop_rows = []
+            for county_code in county_codes:
+                pop_rows = fetch_block_population(county_code, fips)
+                all_pop_rows.extend(pop_rows)
+            print(f"Fetched {len(all_pop_rows):,} block population records across all counties in state.")
+            print("Loading population data into PostGIS…")
+            inserted, _ = load_population_table(all_pop_rows)
+            print("Population data loaded.")
+            print(f"Records inserted: {inserted:,}")
+    
+            total_elapsed = time.time() - start_time
+            print(f"Total time elapsed: {total_elapsed:.2f} seconds")
+    
+            print("\nDone ✅")
+            print(f"- Geometry table: {SCHEMA}.{BLOCK_TABLE}")
+            print(f"- Population table: {SCHEMA}.{POP_TABLE}")
+            print("\nExample join query:")
+            print(f"""
+    SELECT b.geoid20, p.pop, ST_Area(b.geom) AS area_m2
+    FROM {SCHEMA}.{BLOCK_TABLE} b
+    JOIN {SCHEMA}.{POP_TABLE} p USING (geoid20)
+    LIMIT 5;
+    """)
+    
+            # --- Call county_pop_weighted_centroid.main() to compute centroids after import ---
+            print("\nComputing population-weighted county centroids...")
+            county_pop_weighted_centroid.main()
+            print("County centroids computation complete.")
+    
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 if __name__ == "__main__":
     main()
