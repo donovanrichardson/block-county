@@ -21,31 +21,35 @@ BLOCK_TABLE = "de_blocks_2020"
 POP_TABLE = "de_block_pop_2020"
 
 SQL = f"""
+WITH weighted AS (
+  SELECT
+    b.countyfp20,
+    MIN(LEFT(b.geoid20, 5)) AS county_geoid,
+    SUM(ST_X(ST_Centroid(b.geom)) * p.pop)::float AS weighted_x,
+    SUM(ST_Y(ST_Centroid(b.geom)) * p.pop)::float AS weighted_y,
+    SUM(p.pop) AS pop
+  FROM {SCHEMA}.{BLOCK_TABLE} b
+  JOIN {SCHEMA}.{POP_TABLE} p ON b.geoid20 = p.geoid20
+  GROUP BY b.countyfp20
+)
 SELECT
-  b.countyfp20,
-  MIN(LEFT(b.geoid20, 5)) AS county_geoid,
-  ST_X(ST_SetSRID(ST_MakePoint(
-    SUM(ST_X(ST_Centroid(b.geom)) * p.pop)::float / SUM(p.pop),
-    SUM(ST_Y(ST_Centroid(b.geom)) * p.pop)::float / SUM(p.pop)
-  ), 4269)) AS centroid_x,
-  ST_Y(ST_SetSRID(ST_MakePoint(
-    SUM(ST_X(ST_Centroid(b.geom)) * p.pop)::float / SUM(p.pop),
-    SUM(ST_Y(ST_Centroid(b.geom)) * p.pop)::float / SUM(p.pop)
-  ), 4269)) AS centroid_y,
-  SUM(p.pop) AS pop
-FROM {SCHEMA}.{BLOCK_TABLE} b
-JOIN {SCHEMA}.{POP_TABLE} p ON b.geoid20 = p.geoid20
-GROUP BY b.countyfp20
-ORDER BY b.countyfp20;
+  countyfp20,
+  county_geoid,
+  ST_X(ST_SetSRID(ST_MakePoint(weighted_x / pop, weighted_y / pop), 4269)) AS centroid_x,
+  ST_Y(ST_SetSRID(ST_MakePoint(weighted_x / pop, weighted_y / pop), 4269)) AS centroid_y,
+  pop
+FROM weighted
+ORDER BY countyfp20;
 """
 
 def main():
     print("Connecting to database...")
     conn = psycopg2.connect(**DB_CRED)
+    table_name = "county_centroids2"
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        print("Creating county_centroids table if not exists...")
+        print(f"Creating {table_name} table if not exists...")
         cur.execute(f"""
-            CREATE TABLE IF NOT EXISTS {SCHEMA}.county_centroids (
+            CREATE TABLE IF NOT EXISTS {SCHEMA}.{table_name} (
                 county_geoid text PRIMARY KEY,
                 centroid_geom geometry(Point, 4269) NOT NULL,
                 pop integer NOT NULL
@@ -62,13 +66,13 @@ def main():
             centroid_y = row['centroid_y']
             pop = row['pop']
             cur.execute(f"""
-                INSERT INTO {SCHEMA}.county_centroids (county_geoid, centroid_geom, pop)
+                INSERT INTO {SCHEMA}.{table_name} (county_geoid, centroid_geom, pop)
                 VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4269), %s)
                 ON CONFLICT (county_geoid) DO UPDATE
                 SET centroid_geom = EXCLUDED.centroid_geom, pop = EXCLUDED.pop;
             """, (county_geoid, centroid_x, centroid_y, pop))
         conn.commit()
-        print("\nCounty population-weighted centroids saved to county_centroids table:")
+        print(f"\nCounty population-weighted centroids saved to {table_name} table:")
         for row in results:
             print(f"County {row['county_geoid']}: centroid_x={row['centroid_x']:.6f}, centroid_y={row['centroid_y']:.6f}, pop={row['pop']}")
     conn.close()
