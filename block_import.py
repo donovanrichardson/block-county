@@ -81,7 +81,7 @@ def psql_conn():
         password=DB_CRED["password"],
     )
 
-def run_ogr2ogr(shp_path, table_fullname, epsg_target):
+def run_ogr2ogr(shp_path, table_fullfdename, epsg_target):
     """
     Load shapefile into PostGIS using ogr2ogr.
     -nlt MULTIPOLYGON because blocks are polygons; TIGER block geometries are polygons/multipolygons.
@@ -170,6 +170,20 @@ def create_block_indexes():
             COMMENT ON INDEX {BLOCK_TABLE}_county_tract_idx
             IS 'BTREE on (countyfp20, tractce20): speeds filtering/grouping within county/tract boundaries.';
         """)
+        # Index on blockce20
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS {BLOCK_TABLE}_blockce20_idx
+            ON {tbl} (blockce20);
+            COMMENT ON INDEX {BLOCK_TABLE}_blockce20_idx
+            IS 'BTREE on blockce20: enables fast filtering/grouping by block code within tracts/counties.';
+        """)
+        # Index on aland20
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS {BLOCK_TABLE}_aland20_idx
+            ON {tbl} (aland20);
+            COMMENT ON INDEX {BLOCK_TABLE}_aland20_idx
+            IS 'BTREE on aland20: enables fast filtering/sorting by land area.';
+        """)
         conn.commit()
 
 def get_county_codes():
@@ -252,6 +266,20 @@ def load_population_table(pop_rows):
         cur.execute(f"""
             COMMENT ON CONSTRAINT {POP_TABLE}_pkey ON {tbl}
             IS 'PRIMARY KEY on geoid20: supports fast equality joins to block geometry by unique block identifier.';
+        """)
+        # Explicit index on PK (geoid20) for clarity
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS {POP_TABLE}_geoid20_idx
+            ON {tbl} (geoid20);
+            COMMENT ON INDEX {POP_TABLE}_geoid20_idx
+            IS 'BTREE index on geoid20: supports fast equality joins and lookups by block identifier (redundant with PK, but explicit for clarity).';
+        """)
+        # Index on pop (population)
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS {POP_TABLE}_pop_idx
+            ON {tbl} (pop);
+            COMMENT ON INDEX {POP_TABLE}_pop_idx
+            IS 'BTREE index on pop: enables fast filtering and sorting by population.';
         """)
         conn.commit()
     elapsed = time.time() - start_time

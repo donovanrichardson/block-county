@@ -2,13 +2,13 @@
 """
 Compute population-weighted centroid for each Delaware county using block-level population and geometry.
 
-Connects to the same database as llm.py.
+Connects to the same database as block_import.py.
 """
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from tqdm import tqdm
 
-# Use the same DB_CRED as llm.py
+# Use the same DB_CRED as block_import.py
 DB_CRED = {
     "host": "localhost",
     "port": 5432,
