@@ -128,27 +128,23 @@ def create_block_indexes():
     """
     with psql_conn() as conn, conn.cursor() as cur:
         tbl = f"{SCHEMA}.{BLOCK_TABLE}"
-        # Some TIGER fields are fixed-width text; ensure the key column exists in the imported schema.
-        # GEOID20 exists in TABBLOCK20; make it PK.
+        # Ensure geoid20 is text
         cur.execute(f"""
             ALTER TABLE {tbl}
             ALTER COLUMN geoid20 TYPE text;
         """)
-        # Drop any existing PK if re-running
+        # Add PK on geoid20 if not exists
         cur.execute(f"""
-            SELECT conname FROM pg_constraint
-            WHERE conrelid = '{tbl}'::regclass AND contype = 'p'
-        """)
-        row = cur.fetchone()
-        if row:
-            pk_name = row[0]
-            cur.execute(f'ALTER TABLE {tbl} DROP CONSTRAINT {pk_name};')
-        # Add PK on geoid20
-        cur.execute(f"""
-            ALTER TABLE {tbl}
-            ADD CONSTRAINT {BLOCK_TABLE}_pk PRIMARY KEY (geoid20);
-            COMMENT ON CONSTRAINT {BLOCK_TABLE}_pk ON {tbl}
-            IS 'PRIMARY KEY on geoid20: unique per census block; ideal for equality joins with attribute tables.';
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints
+                    WHERE table_schema = '{SCHEMA}' AND table_name = '{BLOCK_TABLE}' AND constraint_type = 'PRIMARY KEY'
+                ) THEN
+                    ALTER TABLE {tbl}
+                    ADD CONSTRAINT {BLOCK_TABLE}_pk PRIMARY KEY (geoid20);
+                END IF;
+            END$$;
         """)
         # Spatial index on geom
         cur.execute(f"""
@@ -230,7 +226,7 @@ def fetch_block_population(county_code, fips):
 
 def load_population_table(pop_rows):
     """
-    Create/replace the population table and load values.
+    Create the population table if it does not exist and load values.
     Also add PK + BTREE index with rationale.
     Returns the number of records inserted and time elapsed in seconds.
     """
@@ -238,9 +234,9 @@ def load_population_table(pop_rows):
     start_time = time.time()
     with psql_conn() as conn, conn.cursor() as cur:
         tbl = f"{SCHEMA}.{POP_TABLE}"
-        cur.execute(f"DROP TABLE IF EXISTS {tbl};")
+        # Only create the table if it does not exist
         cur.execute(f"""
-            CREATE TABLE {tbl}(
+            CREATE TABLE IF NOT EXISTS {tbl}(
                 geoid20 text PRIMARY KEY,
                 pop integer NOT NULL
             );
