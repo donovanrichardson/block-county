@@ -17,8 +17,8 @@ DB_CRED = {
     "password": "your_password_here",
 }
 SCHEMA = "public"
-BLOCK_TABLE = "de_blocks_2020"
-POP_TABLE = "de_block_pop_2020"
+BLOCK_TABLE = "blocks_2020"
+POP_TABLE = "block_pop_2020"
 
 SQL = f"""
 WITH weighted AS (

@@ -304,6 +304,18 @@ def download_with_progress(url, dest_path):
 def main():
     start_time = time.time()  # Track total elapsed time
     ensure_schema_and_extensions()
+    
+# list of fips codes for all states except AK (02) and HI (15)
+    STATE_FIPS = [
+        "01","04","05","06","08","09","10","11","12","13",
+        "16","17","18","19","20","21","22","23","24","25",
+        "26","27","28","29","30","31","32","33","34","35",
+        "36","37","38","39","40","41","42","44","45","46",
+        "47","48","49","50","51","53","54","55","56"
+    ]
+    
+    # Default state FIPS (DE = 10). Change to a single FIPS string or iterate over STATE_FIPS as needed.
+    fips = "10"  # TODO: iterate STATE_FIPS to process multiple states
 
     fips = 10# TODO: state-specific fips, currently hardcoded for Delaware
     # Official TIGER/Line 2020 blocks
