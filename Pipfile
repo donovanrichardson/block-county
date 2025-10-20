@@ -14,6 +14,7 @@ matplotlib = "*"
 fiona = "*"
 pyproj = "*"
 rtree = "*"
+scikit-learn-extra = "*"
 
 [dev-packages]
 
