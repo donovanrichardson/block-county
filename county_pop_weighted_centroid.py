@@ -26,11 +26,10 @@ SQL_TEMPLATE = """
 WITH weighted AS (
   SELECT
     LEFT(b.geoid20, 5) AS county_geoid,
-    SUM(ST_X(ST_Centroid(b.geom)) * p.pop)::float AS weighted_x,
-    SUM(ST_Y(ST_Centroid(b.geom)) * p.pop)::float AS weighted_y,
-    SUM(p.pop) AS pop
+    SUM(ST_X(ST_Centroid(b.geom)) * b.pop20)::float AS weighted_x,
+    SUM(ST_Y(ST_Centroid(b.geom)) * b.pop20)::float AS weighted_y,
+    SUM(b.pop20) AS pop
   FROM {schema}.{block} b
-  JOIN {schema}.{pop} p ON b.geoid20 = p.geoid20
   WHERE LEFT(b.geoid20, 5) IN ({placeholders})
   GROUP BY county_geoid
 )

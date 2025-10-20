@@ -306,7 +306,7 @@ def main():
     STATE_FIPS = [
         # "10","56",
         # "50",
-        "56", "50", "11", "38",
+        # "56", "50", "11", "38",
         # "46", "10", "30", "44",
         # "23", "33", "16", "54",
         # "31", "35", "28", "05",
@@ -314,11 +314,11 @@ def main():
         # "09", "41", "40", "21",
         # "22", "01", "45", "08",
         # "27", "55", "24", "29",
-        # "18", "47", "25", "04",
-        # "53", "51", "34", "26",
-        # "37", "13", "39", "17",
-        # "42", "36", "12", "48",
-        # "06"
+        "18", "47", "25", "04",
+        "53", "51", "34", "26",
+        "37", "13", "39", "17",
+        "42", "36", "12", "48",
+        "06"
     ]
 
     projections = []  # List to store (fips, projection) tuples
@@ -396,22 +396,21 @@ def main():
             # 4) Create PK + indexes with comments
             create_block_indexes()
 
-            # 5) Fetch population and load into PostGIS for all counties
-            print("Getting all state county codes from block geometry table…")
-            county_codes = get_county_codes()
-            print(f"Found counties: {county_codes}")
-            all_pop_rows = []
-            for county_code in county_codes:
-                pop_rows = fetch_block_population(county_code, fips)
-                all_pop_rows.extend(pop_rows)
-            print(f"Fetched {len(all_pop_rows):,} block population records across all counties in state.")
-            print("Loading population data into PostGIS…")
-            inserted, _ = load_population_table(all_pop_rows)
-            print("Population data loaded.")
-            print(f"Records inserted: {inserted:,}")
+            # # 5) Fetch population and load into PostGIS for all counties todo this is unnecessary bc population is in the block table
+            # print("Getting all state county codes from block geometry table…")
+            # county_codes = get_county_codes()
+            # print(f"Found counties: {county_codes}")
+            # all_pop_rows = []
+            # for county_code in county_codes:
+            #     pop_rows = fetch_block_population(county_code, fips)
+            #     all_pop_rows.extend(pop_rows)
+            # print(f"Fetched {len(all_pop_rows):,} block population records across all counties in state.")
+            # print("Loading population data into PostGIS…")
+            # inserted, _ = load_population_table(all_pop_rows)
+            # print("Population data loaded.")
+            # print(f"Records inserted: {inserted:,}")
 
-            total_elapsed = time.time() - state_start
-            print(f"Total time elapsed (State): {total_elapsed:.2f} seconds")
+
 
             print("\nDone ✅")
             print(f"- Geometry table: {SCHEMA}.{BLOCK_TABLE}")
@@ -431,6 +430,8 @@ def main():
 
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+            total_elapsed = time.time() - state_start
+            print(f"Total time elapsed (State): {total_elapsed:.2f} seconds")
 
     # --- Print all collected projection info at the end ---
     print("\nProjection information for each processed FIPS:")
