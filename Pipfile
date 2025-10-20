@@ -15,6 +15,7 @@ fiona = "*"
 pyproj = "*"
 rtree = "*"
 scikit-learn-extra = "*"
+numpy = "<2"
 
 [dev-packages]
 
