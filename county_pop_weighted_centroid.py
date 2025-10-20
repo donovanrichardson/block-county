@@ -25,24 +25,22 @@ POP_TABLE = "block_pop_2020"
 SQL_TEMPLATE = """
 WITH weighted AS (
   SELECT
-    b.countyfp20,
-    MIN(LEFT(b.geoid20, 5)) AS county_geoid,
+    LEFT(b.geoid20, 5) AS county_geoid,
     SUM(ST_X(ST_Centroid(b.geom)) * p.pop)::float AS weighted_x,
     SUM(ST_Y(ST_Centroid(b.geom)) * p.pop)::float AS weighted_y,
     SUM(p.pop) AS pop
   FROM {schema}.{block} b
   JOIN {schema}.{pop} p ON b.geoid20 = p.geoid20
-  WHERE b.countyfp20 IN ({placeholders})
-  GROUP BY b.countyfp20
+  WHERE LEFT(b.geoid20, 5) IN ({placeholders})
+  GROUP BY county_geoid
 )
 SELECT
-  countyfp20,
   county_geoid,
   ST_X(ST_SetSRID(ST_MakePoint(weighted_x / pop, weighted_y / pop), 4269)) AS centroid_x,
   ST_Y(ST_SetSRID(ST_MakePoint(weighted_x / pop, weighted_y / pop), 4269)) AS centroid_y,
   pop
 FROM weighted
-ORDER BY countyfp20;
+ORDER BY county_geoid;
 """
 
 
@@ -62,15 +60,16 @@ def main():
         conn.commit()
 
         # --- Find counties missing a centroid ---
-        # Only process counties not yet in the centroid table
+        # Use LEFT(geoid20, 5) as the unique county identifier
         print("Checking for counties with missing centroids...")
         cur.execute(f'''
-            SELECT countyfp20, MIN(LEFT(geoid20, 5)) AS county_geoid
-            FROM {SCHEMA}.{BLOCK_TABLE}
-            GROUP BY countyfp20
-            HAVING MIN(LEFT(geoid20, 5)) NOT IN (SELECT county_geoid FROM {SCHEMA}.{table_name})
+            SELECT county_geoid FROM (
+                SELECT DISTINCT LEFT(geoid20, 5) AS county_geoid
+                FROM {SCHEMA}.{BLOCK_TABLE}
+            ) sub
+            WHERE county_geoid NOT IN (SELECT county_geoid FROM {SCHEMA}.{table_name})
         ''')
-        missing_counties = [row['countyfp20'] for row in cur.fetchall()]
+        missing_counties = [row['county_geoid'] for row in cur.fetchall()]
         # Comment: Only counties not present in county_centroids2 will be processed
         if not missing_counties:
             print("All counties already have centroids in the table. Nothing to do.")
@@ -112,4 +111,4 @@ def main():
 if __name__ == "__main__":
     main()
 # --- End of script ---
-# Comments added to explain changes: Only counties missing a centroid are processed, using a parameterized query for safety and efficiency.
+# Comments added to explain changes: Only counties missing a centroid are processed, using LEFT(geoid20, 5) as the unique county identifier for safety and correctness.

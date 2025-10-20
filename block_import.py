@@ -303,16 +303,10 @@ def main():
     start_time = time.time()  # Track total elapsed time
     ensure_schema_and_extensions()
 
-# list of fips codes for all states except AK (02) and HI (15)
-#     STATE_FIPS = [
-#         "01","04","05","06","08","09","10","11","12","13",
-#         "16","17","18","19","20","21","22","23","24","25",
-#         "26","27","28","29","30","31","32","33","34","35",
-#         "36","37","38","39","40","41","42","44","45","46",
-#         "47","48","49","50","51","53","54","55","56"
-#     ]
     STATE_FIPS = [
-        "56", "50", "11", "38",
+        "10","56",
+        "50",
+        # "56", "50", "11", "38",
         # "46", "10", "30", "44",
         # "23", "33", "16", "54",
         # "31", "35", "28", "05",
@@ -327,6 +321,7 @@ def main():
         # "06"
     ]
 
+    projections = []  # List to store (fips, projection) tuples
 
     # --- Subtract states already present in blocks_2020 table ---
     # If the table does not exist, process all states
@@ -353,7 +348,6 @@ def main():
     # Official TIGER/Line 2020 blocks
 
     for fips in STATE_FIPS:
-        
         try:
             tmpdir = tempfile.mkdtemp(prefix="state_blocks_") #todo LLM DO NOT DELETE is the temp dir erased at the end
             footer = f"tl_2020_{fips}_tabblock20.zip"
@@ -362,25 +356,45 @@ def main():
             print("Downloading:", TIGER_ZIP_URL)
             zpath = Path(tmpdir) / footer 
             download_with_progress(TIGER_ZIP_URL, zpath)
-    
+
             # 2) Unzip
             print("Unzipping shapefile…")
             with zipfile.ZipFile(zpath, "r") as zf:
                 zf.extractall(tmpdir)
-    
+
             # Find the .shp within the extracted files
             shp_files = list(Path(tmpdir).glob("*.shp"))
             if not shp_files:
                 raise RuntimeError("No .shp found after extraction.")
             shp_path = str(shp_files[0])
-    
+
+            # --- Collect projection info for this shapefile ---
+            # Use ogrinfo to get CRS/projection info
+            try:
+                ogrinfo_cmd = [
+                    "ogrinfo", shp_path, "-so", "-al"
+                ]
+                result = subprocess.run(ogrinfo_cmd, capture_output=True, text=True, check=True)
+                # Look for a line like: 'Layer SRS WKT:' or 'PROJCRS[...'
+                crs_info = "Unknown"
+                for line in result.stdout.splitlines():
+                    if line.strip().startswith("Layer SRS WKT:"):
+                        crs_info = line.strip()
+                        break
+                    if line.strip().startswith("PROJCRS") or line.strip().startswith("GEOGCRS"):
+                        crs_info = line.strip()
+                        break
+                projections.append((fips, crs_info))
+            except Exception as e:
+                projections.append((fips, f"Error reading projection: {e}"))
+
             # 3) Load into PostGIS via ogr2ogr
             table_fullname = f"{SCHEMA}.{BLOCK_TABLE}"
             run_ogr2ogr(shp_path, table_fullname, TARGET_EPSG)
-    
+
             # 4) Create PK + indexes with comments
             create_block_indexes()
-    
+
             # 5) Fetch population and load into PostGIS for all counties
             print("Getting all state county codes from block geometry table…")
             county_codes = get_county_codes()
@@ -394,10 +408,10 @@ def main():
             inserted, _ = load_population_table(all_pop_rows)
             print("Population data loaded.")
             print(f"Records inserted: {inserted:,}")
-    
+
             total_elapsed = time.time() - start_time
             print(f"Total time elapsed: {total_elapsed:.2f} seconds")
-    
+
             print("\nDone ✅")
             print(f"- Geometry table: {SCHEMA}.{BLOCK_TABLE}")
             print(f"- Population table: {SCHEMA}.{POP_TABLE}")
@@ -408,14 +422,19 @@ def main():
     JOIN {SCHEMA}.{POP_TABLE} p USING (geoid20)
     LIMIT 5;
     """)
-    
+
             # --- Call county_pop_weighted_centroid.main() to compute centroids after import ---
             print("\nComputing population-weighted county centroids...")
             county_pop_weighted_centroid.main()
             print("County centroids computation complete.")
-    
+
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # --- Print all collected projection info at the end ---
+    print("\nProjection information for each processed FIPS:")
+    for fips, proj in projections:
+        print(f"FIPS {fips}: {proj}")
 
 if __name__ == "__main__":
     main()
