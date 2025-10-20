@@ -304,9 +304,9 @@ def main():
     ensure_schema_and_extensions()
 
     STATE_FIPS = [
-        "10","56",
-        "50",
-        # "56", "50", "11", "38",
+        # "10","56",
+        # "50",
+        "56", "50", "11", "38",
         # "46", "10", "30", "44",
         # "23", "33", "16", "54",
         # "31", "35", "28", "05",
@@ -348,6 +348,7 @@ def main():
     # Official TIGER/Line 2020 blocks
 
     for fips in STATE_FIPS:
+        state_start = time.time()
         try:
             tmpdir = tempfile.mkdtemp(prefix="state_blocks_") #todo LLM DO NOT DELETE is the temp dir erased at the end
             footer = f"tl_2020_{fips}_tabblock20.zip"
@@ -409,8 +410,8 @@ def main():
             print("Population data loaded.")
             print(f"Records inserted: {inserted:,}")
 
-            total_elapsed = time.time() - start_time
-            print(f"Total time elapsed: {total_elapsed:.2f} seconds")
+            total_elapsed = time.time() - state_start
+            print(f"Total time elapsed (State): {total_elapsed:.2f} seconds")
 
             print("\nDone ✅")
             print(f"- Geometry table: {SCHEMA}.{BLOCK_TABLE}")
@@ -435,6 +436,9 @@ def main():
     print("\nProjection information for each processed FIPS:")
     for fips, proj in projections:
         print(f"FIPS {fips}: {proj}")
+    total_elapsed = time.time() - start_time
+    print(f"Total time elapsed: {total_elapsed:.2f} seconds")
+    
 
 if __name__ == "__main__":
     main()
