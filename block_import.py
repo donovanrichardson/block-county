@@ -302,7 +302,7 @@ def download_with_progress(url, dest_path):
 def main():
     start_time = time.time()  # Track total elapsed time
     ensure_schema_and_extensions()
-    
+
 # list of fips codes for all states except AK (02) and HI (15)
 #     STATE_FIPS = [
 #         "01","04","05","06","08","09","10","11","12","13",
@@ -314,7 +314,25 @@ def main():
     STATE_FIPS = [
         "10","56","50"
     ]
-    
+
+    # --- Subtract states already present in blocks_2020 table ---
+    # If the table does not exist, process all states
+    try:
+        with psql_conn() as conn, conn.cursor() as cur:
+            cur.execute(f"""
+                SELECT DISTINCT LEFT(geoid20, 2) AS state_fips
+                FROM {SCHEMA}.{BLOCK_TABLE}
+            """)
+            existing_fips = {row[0] for row in cur.fetchall()}
+            # Remove any FIPS already present
+            STATE_FIPS = [fips for fips in STATE_FIPS if fips not in existing_fips]
+            if not STATE_FIPS:
+                print("All states in STATE_FIPS are already present in the block table. Nothing to do.")
+                return
+    except psycopg2.errors.UndefinedTable:
+        # Table does not exist, process all states
+        pass
+
     # Default state FIPS (DE = 10). Change to a single FIPS string or iterate over STATE_FIPS as needed.
     # fips = "10"  # TODO: iterate STATE_FIPS to process multiple states
 
