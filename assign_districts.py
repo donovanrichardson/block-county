@@ -22,7 +22,7 @@ DB_CRED = {
     "password": "your_password_here",
 }
 SCHEMA = "public"
-CENTROID_TABLE = "county_centroids_2"
+CENTROID_TABLE = "county_centroids2"
 DISTRICT_TABLE = "district"
 
 N_CLUSTERS = 19  # Change as needed

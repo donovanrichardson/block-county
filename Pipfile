@@ -16,6 +16,7 @@ pyproj = "*"
 rtree = "*"
 scikit-learn-extra = "*"
 numpy = "<2"
+networkx = "*"
 
 [dev-packages]
 
