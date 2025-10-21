@@ -59,7 +59,7 @@ def create_district_table():
             CREATE TABLE IF NOT EXISTS {SCHEMA}.{DISTRICT_TABLE} (
                 geoid text PRIMARY KEY,
                 type text NOT NULL,
-                parent integer NOT NULL,
+                parent text NOT NULL,
                 medioid boolean NOT NULL
             );
         """)

@@ -7,6 +7,9 @@ Connects to the same database as block_import.py.
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from tqdm import tqdm
+from shapely import wkb
+from shapely.geometry import Point
+import numpy as np
 
 # Use the same DB_CRED as block_import.py
 DB_CRED = {
@@ -26,9 +29,9 @@ SQL_TEMPLATE = """
 WITH weighted AS (
   SELECT
     LEFT(b.geoid20, {digits}) AS county_geoid,
-    SUM(ST_X(ST_Centroid(b.geom)) * b.pop20)::float AS weighted_x,
-    SUM(ST_Y(ST_Centroid(b.geom)) * b.pop20)::float AS weighted_y,
-    SUM(b.pop20) AS pop
+    GREATEST(SUM(ST_X(ST_Centroid(b.geom)) * b.pop20)::float, 0.5) AS weighted_x,
+    GREATEST(SUM(ST_Y(ST_Centroid(b.geom)) * b.pop20)::float, 0.5) AS weighted_y,
+    GREATEST(SUM(b.pop20), 0.5) AS pop
   FROM {schema}.{block} b
   WHERE LEFT(b.geoid20, {digits}) IN ({placeholders})
   GROUP BY county_geoid
@@ -41,6 +44,55 @@ SELECT
 FROM weighted
 ORDER BY county_geoid;
 """
+
+# the second series of greatest is not necessary. already min 0.5
+
+
+def fetch_blocks(cur, geoid_digits, missing_geoids):
+    placeholders = ','.join(['%s'] * len(missing_geoids))
+    cur.execute(f"""
+        SELECT LEFT(geoid20, %s) AS geoid, ST_X(ST_Centroid(geom)) AS x, ST_Y(ST_Centroid(geom)) AS y, pop20
+        FROM {SCHEMA}.{BLOCK_TABLE}
+        WHERE LEFT(geoid20, %s) IN ({placeholders})
+    """, (geoid_digits, geoid_digits, *missing_geoids))
+    return cur.fetchall()
+
+
+def calculate_centroids(blocks, geoid_digits):
+    # Group blocks by geoid
+    groups = {}
+    for row in blocks:
+        geoid = row['geoid']
+        x = row['x']
+        y = row['y']
+        pop = row['pop20'] if row['pop20'] is not None else 0
+        if geoid not in groups:
+            groups[geoid] = {'xs': [], 'ys': [], 'pops': []}
+        groups[geoid]['xs'].append(x)
+        groups[geoid]['ys'].append(y)
+        groups[geoid]['pops'].append(pop)
+    # Calculate centroids
+    results = []
+    for geoid, vals in groups.items():
+        xs = np.array(vals['xs'])
+        ys = np.array(vals['ys'])
+        # Convert pops to float to avoid Decimal issues
+        pops = np.array([float(p) for p in vals['pops']])
+        total_pop = np.sum(pops)
+        if total_pop > 0:
+            centroid_x = float(np.sum(xs * pops) / total_pop)
+            centroid_y = float(np.sum(ys * pops) / total_pop)
+        else:
+            centroid_x = float(np.mean(xs))
+            centroid_y = float(np.mean(ys))
+        results.append({
+            'county_geoid': geoid,
+            'centroid_x': centroid_x,
+            'centroid_y': centroid_y,
+            'pop': int(total_pop),
+            'type': str(geoid_digits)
+        })
+    return results
 
 
 def main(geoid_digits=5):# 5 for county, 11 for tract, 12 for blockgroup
@@ -59,8 +111,6 @@ def main(geoid_digits=5):# 5 for county, 11 for tract, 12 for blockgroup
         """)
         conn.commit()
 
-        # --- Find counties missing a centroid ---
-        # Use LEFT(geoid20, 5) as the unique county identifier
         print("Checking for counties with missing centroids...")
         cur.execute(f'''
             SELECT county_geoid FROM (
@@ -78,30 +128,27 @@ def main(geoid_digits=5):# 5 for county, 11 for tract, 12 for blockgroup
 
         print(f"Found {len(missing_counties)} counties missing centroids: {missing_counties}")
 
-        # --- Build parameterized query for missing counties ---
-        placeholders = ",".join(["%s"] * len(missing_counties))
-        sql = SQL_TEMPLATE.format(
-            schema=SCHEMA,
-            block=BLOCK_TABLE,
-            pop=POP_TABLE,
-            digits=geoid_digits,
-            placeholders=placeholders,
-        )
-        print("Calculating population-weighted centroids and populations for missing counties...")
-        cur.execute(sql, missing_counties)
-        results = cur.fetchall()
+        print("Fetching blocks for missing counties...")
+        blocks = fetch_blocks(cur, geoid_digits, missing_counties)
+        print(f"Fetched {len(blocks)} blocks.")
+
+        print("Calculating population-weighted centroids and populations in Python...")
+        results = calculate_centroids(blocks, geoid_digits)
+        print(f"Calculated {len(results)} centroids.")
+
         print(f"Inserting/updating {len(results)} county centroids...")
         for row in tqdm(results, desc="Saving centroids", unit="county"):
             county_geoid = row['county_geoid']
             centroid_x = row['centroid_x']
             centroid_y = row['centroid_y']
             pop = row['pop']
+            typ = row['type']
             cur.execute(f"""
                 INSERT INTO {SCHEMA}.{table_name} (county_geoid, centroid_geom, pop, type)
                 VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4269), %s, %s)
                 ON CONFLICT (county_geoid) DO UPDATE
                 SET centroid_geom = EXCLUDED.centroid_geom, pop = EXCLUDED.pop;
-            """, (county_geoid, centroid_x, centroid_y, pop, geoid_digits))
+            """, (county_geoid, centroid_x, centroid_y, pop, typ))
         conn.commit()
         print(f"\nCounty population-weighted centroids saved to {table_name} table:")
         for row in results:
