@@ -35,8 +35,8 @@ WITH weighted AS (
 )
 SELECT
   county_geoid,
-  ST_X(ST_SetSRID(ST_MakePoint(weighted_x / pop, weighted_y / pop), 4269)) AS centroid_x,
-  ST_Y(ST_SetSRID(ST_MakePoint(weighted_x / pop, weighted_y / pop), 4269)) AS centroid_y,
+  ST_X(ST_SetSRID(ST_MakePoint(weighted_x / GREATEST(pop, 0.5), weighted_y / GREATEST(pop, 0.5)), 4269)) AS centroid_x,
+  ST_Y(ST_SetSRID(ST_MakePoint(weighted_x / GREATEST(pop, 0.5), weighted_y / GREATEST(pop, 0.5)), 4269)) AS centroid_y,
   pop
 FROM weighted
 ORDER BY county_geoid;
@@ -112,4 +112,4 @@ def main(geoid_digits=5):# 5 for county, 11 for tract, 12 for blockgroup
 if __name__ == "__main__":
     main()
 # --- End of script ---
-# Comments added to explain changes: Only counties missing a centroid are processed, using LEFT(geoid20, 5) as the unique county identifier for safety and correctness.
+# Comments added to explain changes: Only counties missing a centroid are processed, using LEFT(geoid20, 5) as the unique county identifier for safety and correctness. Division by zero in centroid calculation is prevented by using GREATEST(pop, 0.5) instead of pop.
