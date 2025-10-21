@@ -1,0 +1,1 @@
+ogr2ogr -append -f PostgreSQL "PG:host=localhost port=5432 dbname=block-county user=block-county password=your_password_here" tl_2020_27_tract.shp -nln public.tracts_2020 -lco GEOMETRY_NAME=geom -nlt MULTIPOLYGON -lco FID=gid -progress -t_srs EPSG:4269

@@ -121,7 +121,7 @@ def cluster_tracts(tracts, n_clusters, parent_label):
         sample = np.random.choice(flat, size=sample_size, replace=False)
         largest_5 = np.sort(sample)[-5:]
         print("Largest 5 values in a sample of 1000 from dist_matrix:", largest_5)
-    # Find and print tract pairs with infinite distance
+    # Find and print tract pairs with infinite distance todo remove this it makes the thing take longer
     inf_pairs = []
     for i in range(n):
         for j in range(n):

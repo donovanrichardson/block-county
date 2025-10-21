@@ -31,8 +31,20 @@ TRACT_TABLE = "tracts_2020"
 TARGET_EPSG = "EPSG:4269"
 
 STATE_FIPS = [
-    "18", "47", "25", "04", "53", "51", "34", "26",
-    "37", "13", "39", "17", "42", "36", "12", "48", "06" # add more
+    "56", "50", "11", "38",
+    "46", "10", "30", "44",
+    "23", "33", "16", "54",
+    "31", "35", "28", "05",
+    "19", "20", "32", "49",
+    "09", "41", "40", "21",
+    "22", "01", "45", "08",
+    # "27", 
+    "55", "24", "29",
+    "18", "47", "25", "04",
+    "53", "51", "34", "26",
+    "37", "13", "39", "17",
+    "42", "36", "12", "48",
+    "06"
 ]
 
 # ----------------------------
@@ -76,6 +88,24 @@ def create_tract_indexes():
             ALTER TABLE {tbl}
             ALTER COLUMN geoid TYPE text;
         """)
+        # Add tract_11 column if not exists
+        cur.execute(f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = '{SCHEMA}' AND table_name = '{TRACT_TABLE}' AND column_name = 'tract_11'
+                ) THEN
+                    ALTER TABLE {tbl} ADD COLUMN tract_11 text;
+                END IF;
+            END$$;
+        """)
+        # Populate tract_11 with first 11 chars of geoid
+        cur.execute(f"""
+            UPDATE {tbl}
+            SET tract_11 = LEFT(geoid, 11)
+            WHERE tract_11 IS NULL OR tract_11 <> LEFT(geoid, 11);
+        """)
         # Add PK on geoid if not exists
         cur.execute(f"""
             DO $$
@@ -94,6 +124,11 @@ def create_tract_indexes():
             CREATE INDEX IF NOT EXISTS {TRACT_TABLE}_geom_gix
             ON {tbl}
             USING GIST (geom);
+        """)
+        # Index on tract_11 for fast lookup
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS {TRACT_TABLE}_tract_11_idx
+            ON {tbl} (tract_11);
         """)
         conn.commit()
 
@@ -144,4 +179,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
