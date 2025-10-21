@@ -25,12 +25,12 @@ POP_TABLE = "block_pop_2020"
 SQL_TEMPLATE = """
 WITH weighted AS (
   SELECT
-    LEFT(b.geoid20, 5) AS county_geoid,
+    LEFT(b.geoid20, {digits}) AS county_geoid,
     SUM(ST_X(ST_Centroid(b.geom)) * b.pop20)::float AS weighted_x,
     SUM(ST_Y(ST_Centroid(b.geom)) * b.pop20)::float AS weighted_y,
     SUM(b.pop20) AS pop
   FROM {schema}.{block} b
-  WHERE LEFT(b.geoid20, 5) IN ({placeholders})
+  WHERE LEFT(b.geoid20, {digits}) IN ({placeholders})
   GROUP BY county_geoid
 )
 SELECT
@@ -43,7 +43,7 @@ ORDER BY county_geoid;
 """
 
 
-def main():
+def main(geoid_digits=5):# 5 for county, 11 for tract, 12 for blockgroup
     print("Connecting to database...")
     conn = psycopg2.connect(**DB_CRED)
     table_name = "county_centroids2"
@@ -53,7 +53,8 @@ def main():
             CREATE TABLE IF NOT EXISTS {SCHEMA}.{table_name} (
                 county_geoid text PRIMARY KEY,
                 centroid_geom geometry(Point, 4269) NOT NULL,
-                pop integer NOT NULL
+                pop integer NOT NULL,
+                "type" text
             );
         """)
         conn.commit()
@@ -63,7 +64,7 @@ def main():
         print("Checking for counties with missing centroids...")
         cur.execute(f'''
             SELECT county_geoid FROM (
-                SELECT DISTINCT LEFT(geoid20, 5) AS county_geoid
+                SELECT DISTINCT LEFT(geoid20, {geoid_digits}) AS county_geoid
                 FROM {SCHEMA}.{BLOCK_TABLE}
             ) sub
             WHERE county_geoid NOT IN (SELECT county_geoid FROM {SCHEMA}.{table_name})
@@ -83,6 +84,7 @@ def main():
             schema=SCHEMA,
             block=BLOCK_TABLE,
             pop=POP_TABLE,
+            digits=geoid_digits,
             placeholders=placeholders,
         )
         print("Calculating population-weighted centroids and populations for missing counties...")
@@ -95,11 +97,11 @@ def main():
             centroid_y = row['centroid_y']
             pop = row['pop']
             cur.execute(f"""
-                INSERT INTO {SCHEMA}.{table_name} (county_geoid, centroid_geom, pop)
-                VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4269), %s)
+                INSERT INTO {SCHEMA}.{table_name} (county_geoid, centroid_geom, pop, type)
+                VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4269), %s, %s)
                 ON CONFLICT (county_geoid) DO UPDATE
                 SET centroid_geom = EXCLUDED.centroid_geom, pop = EXCLUDED.pop;
-            """, (county_geoid, centroid_x, centroid_y, pop))
+            """, (county_geoid, centroid_x, centroid_y, pop, geoid_digits))
         conn.commit()
         print(f"\nCounty population-weighted centroids saved to {table_name} table:")
         for row in results:
