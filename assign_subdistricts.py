@@ -72,6 +72,20 @@ def fetch_tract_centroids(tract_geoids):
         """, tract_geoids)
         return cur.fetchall()
 
+def get_county_regions_with_subdistricts():
+    """
+    Return set of county region labels (parent) that already have any subdistricts (type=11) assigned.
+    Extracts the region label as the substring between the first and second 'r' in the parent string.
+    """
+    with psycopg2.connect(**DB_CRED) as conn, conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT DISTINCT SUBSTRING(parent FROM '^r([^r]+)r') AS region_label
+            FROM {SCHEMA}.{DISTRICT_TABLE}
+            WHERE type = '11' AND parent ~ '^r.+r\\d+$'
+        """)
+        return set(row[0] for row in cur.fetchall())
+
+
 # --- Clustering logic ---
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -167,7 +181,15 @@ def main():
     total_start = time.time()
     county_regions = get_county_regions()
     print(f"Found {len(county_regions)} county-level regions.")
+    # Find which county regions already have subdistricts assigned
+    regions_with_subdistricts = get_county_regions_with_subdistricts()
+    print(f"Number of regions with subdistricts already assigned: {len(regions_with_subdistricts)}")
+    print(regions_with_subdistricts)
     for region_label in tqdm(county_regions, desc="Processing regions", unit="region"):
+        # Skip regions that already have subdistricts assigned
+        if region_label in regions_with_subdistricts:
+            print(f"Region {region_label} already has subdistricts assigned. Skipping.")
+            continue
         print(f"\nProcessing region: {region_label}")
         counties = get_counties_in_region(region_label)
         print(f"  Counties in region: {len(counties)}")
