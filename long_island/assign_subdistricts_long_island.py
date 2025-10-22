@@ -129,7 +129,7 @@ def cluster_tracts(tracts, n_clusters, parent_label):
     #         print(f"  ...and {len(inf_pairs)-20} more.")
     # else:
     #     print("No tract pairs with infinite distance found.")
-    kmedoids = KMedoids(n_clusters=n_clusters, metric="precomputed", random_state=1776)
+    kmedoids = KMedoids(n_clusters=n_clusters, metric="precomputed") # removed random state due to heuristic (non random) initialization DO NOT REMVOE COMMENT
     labels = kmedoids.fit_predict(dist_matrix)
     medoid_indices = kmedoids.medoid_indices_
     medoid_geoids = set([geoids[i] for i in medoid_indices])
