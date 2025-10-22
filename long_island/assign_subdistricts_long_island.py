@@ -22,34 +22,27 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district2"
+DISTRICT_TABLE = "district_li"
 BLOCK_TABLE = "blocks_2020"
 
-N_CLUSTERS = 19  # Default, can be changed per region
+N_CLUSTERS = 4  # Default, can be changed per region
 
-# --- Utility functions ---
-def get_county_regions():
-    """Fetch all unique county-level region labels (parent) from the district table."""
-    with psycopg2.connect(**DB_CRED) as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+def create_district_table():
+    """Create the district table if it does not exist."""
+    with psycopg2.connect(**DB_CRED) as conn, conn.cursor() as cur:
         cur.execute(f"""
-            SELECT DISTINCT parent FROM {SCHEMA}.{DISTRICT_TABLE}
-            WHERE type = 'county'
+            CREATE TABLE IF NOT EXISTS {SCHEMA}.{DISTRICT_TABLE} (
+                geoid text PRIMARY KEY,
+                type text NOT NULL,
+                parent text NOT NULL,
+                medioid boolean NOT NULL
+            );
         """)
-        return [row['parent'] for row in cur.fetchall()]
+        conn.commit()
 
-def get_counties_in_region(region_label):
-    """Fetch all county geoids assigned to a given region label."""
-    with psycopg2.connect(**DB_CRED) as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(f"""
-            SELECT geoid FROM {SCHEMA}.{DISTRICT_TABLE}
-            WHERE type = 'county' AND parent = %s
-        """, (region_label,))
-        return [row['geoid'] for row in cur.fetchall()]
-
-def get_tracts_in_counties(county_geoids):
+def get_tracts_on_long_island():
     """Fetch all unique tract geoids (first 11 digits) in the given counties from blocks_2020."""
-    if not county_geoids:
-        return []
+    county_geoids = ["36103", "36059", "36081", "36047"]  # Suffolk, Nassau, Queens, Kings
     with psycopg2.connect(**DB_CRED) as conn, conn.cursor() as cur:
         placeholders = ','.join(['%s'] * len(county_geoids))
         cur.execute(f"""
@@ -71,19 +64,6 @@ def fetch_tract_centroids(tract_geoids):
             WHERE type = '11' AND county_geoid IN ({placeholders})
         """, tract_geoids)
         return cur.fetchall()
-
-def get_county_regions_with_subdistricts():
-    """
-    Return set of county region labels (parent) that already have any subdistricts (type=11) assigned.
-    Extracts the region label as the substring between the first and second 'r' in the parent string.
-    """
-    with psycopg2.connect(**DB_CRED) as conn, conn.cursor() as cur:
-        cur.execute(f"""
-            SELECT DISTINCT SUBSTRING(parent FROM '^r([^r]+)r') AS region_label
-            FROM {SCHEMA}.{DISTRICT_TABLE}
-            WHERE type = '11' AND parent ~ '^r.+r\\d+$'
-        """)
-        return set(row[0] for row in cur.fetchall())
 
 
 # --- Clustering logic ---
@@ -177,33 +157,17 @@ def insert_subdistricts(assignments):
 
 # --- Main process ---
 def main():
-    print("Starting tract-level sub-district assignment process...")
+    create_district_table()
+    region_label = "LI"
     total_start = time.time()
-    # county_regions = get_county_regions()
-    county_regions = ["14"] # northeast corridor
-    print(f"Found {len(county_regions)} county-level regions.")
-    # Find which county regions already have subdistricts assigned
-    regions_with_subdistricts = get_county_regions_with_subdistricts()
-    print(f"Number of regions with subdistricts already assigned: {len(regions_with_subdistricts)}")
-    print(regions_with_subdistricts)
-    for region_label in tqdm(county_regions, desc="Processing regions", unit="region"):
-        # Skip regions that already have subdistricts assigned
-        if region_label in regions_with_subdistricts:
-            print(f"Region {region_label} already has subdistricts assigned. Skipping.")
-            continue
-        print(f"\nProcessing region: {region_label}")
-        counties = get_counties_in_region(region_label)
-        print(f"  Counties in region: {len(counties)}")
-        tracts = get_tracts_in_counties(counties)
-        print(f"  Tracts in counties: {len(tracts)}")
-        tract_centroids = fetch_tract_centroids(tracts)
-        print(f"  Tract centroids fetched: {len(tract_centroids)}")
-        if not tract_centroids:
-            print(f"  No tract centroids found for region {region_label}. Skipping.")
-            continue
-        assignments = cluster_tracts(tract_centroids, N_CLUSTERS, region_label)
-        print(f"  Sub-districts assigned: {len(assignments)}")
-        insert_subdistricts(assignments)
+    print("Fetching Tracts on Long Island...")
+    tracts = get_tracts_on_long_island()
+    print(f"  Tracts on Long Island: {len(tracts)}")
+    tract_centroids = fetch_tract_centroids(tracts)
+    print(f"  Tract centroids fetched: {len(tract_centroids)}")
+    assignments = cluster_tracts(tract_centroids, N_CLUSTERS, region_label)
+    print(f"  Sub-districts assigned: {len(assignments)}")
+    insert_subdistricts(assignments)
     total_elapsed = time.time() - total_start
     print(f"All regions processed in {total_elapsed:.2f} seconds.")
     print("Done. Tract-level sub-district assignments saved.")

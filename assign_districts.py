@@ -23,7 +23,7 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district"
+DISTRICT_TABLE = "district2"
 
 N_CLUSTERS = 19  # Change as needed
 
@@ -98,9 +98,9 @@ def assign_districts(counties):
         G.add_node(i)
     for a, b in tqdm(list(edges), desc="Adding edges to graph", unit="edge"):
         dist = haversine(lats[a], lons[a], lats[b], lons[b])
-        pop_a = pops[a] if pops[a] > 0 else 0.5
-        pop_b = pops[b] if pops[b] > 0 else 0.5
-        weight = (dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b)))
+        pop_a = pops[a] if pops[a] > 0 else 1e-9
+        pop_b = pops[b] if pops[b] > 0 else 1e-9
+        weight = ((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2
         G.add_edge(a, b, weight=weight)
     elapsed = time.time() - start
     print(f"Graph built in {elapsed:.2f} seconds.")
