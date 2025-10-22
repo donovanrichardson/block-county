@@ -1,6 +1,6 @@
 # Prompt
 
-Create a script basically exactly like [assign_subdistricts_long_island.py](../long_island/assign_subdistricts_long_island.py) except that it will be used to create hypothetical congressional districts for New York State. This means it should grab all tracts centroids beginning with 36 in county_centroids2 (county_geoid begins with 36 AND type = "11"). Then the script should accept an integer of 2 or higher for the number of districts to split the region into. 
+Create a script in this directory basically exactly like [assign_subdistricts_long_island.py](../long_island/assign_subdistricts_long_island.py) except that it will be used to create hypothetical congressional districts for New York State. This means it should grab all tracts centroids beginning with 36 in county_centroids2 (county_geoid begins with 36 AND type = "11"). Then the script should accept an integer of 2 or higher for the number of districts to split the region into. 
 
 ## Procedure
 
@@ -18,3 +18,4 @@ Create a script basically exactly like [assign_subdistricts_long_island.py](../l
   - population of c is p_c
   - if round(p_c/(p_t/n)) = 1, then do the normal procedure of inserting the members of c into the DISTRICT_TABLE with `parent` equal to its new cluster name (the value of cn_0 or cn_1), and it should get medioid = true if it is the member of the cluster with the lowest sum distance to all other members of c according to m_t
   - else if the population of c is hiigher (rounds to 2 or more), then recursively call this entire procedure with input tracts being the members of c, input number of districts round(p_c/(p_t/n)), and cluster name equal to the cluster name of c (cn_0 or cn_1)
+- IMPORTANT: please add progress indicators where appropriate.
