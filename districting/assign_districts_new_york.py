@@ -23,7 +23,7 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district_ny5"
+DISTRICT_TABLE = "district_ny7"
 
 # Number of congressional districts to create for New York State
 N_DISTRICTS = 26  # Can be changed to any integer >= 2
@@ -49,7 +49,7 @@ def fetch_ny_tract_centroids():
         cur.execute(f"""
             SELECT county_geoid, ST_Y(centroid_geom) AS lat, ST_X(centroid_geom) AS lon, pop
             FROM {SCHEMA}.{CENTROID_TABLE}
-            WHERE type = '11' AND county_geoid LIKE '36%'
+            WHERE type = '11' AND county_geoid LIKE '36059%'
         """)
         return cur.fetchall()
 
@@ -96,8 +96,8 @@ def build_distance_matrix(tracts):
             tri_edges.append((length, edge))
             edges.add(edge)
         # Find the longest edge in this triangle
-        max_edge = max(tri_edges, key=lambda x: x[0])[1]
-        max_edges.add(max_edge)
+        # max_edge = max(tri_edges, key=lambda x: x[0])[1]
+        # max_edges.add(max_edge)
 
     # Build graph with weighted edges, but skip all max edges from triangles
     G = nx.Graph()
@@ -105,8 +105,8 @@ def build_distance_matrix(tracts):
         G.add_node(i)
 
     for a, b in tqdm(edges, desc="  Adding weighted edges", unit="edge", leave=False):
-        if (a, b) in max_edges:
-            continue  # skip all triangle max edges
+        # if (a, b) in max_edges:
+        #     continue  # skip all triangle max edges
         dist = haversine(lats[a], lons[a], lats[b], lons[b])
         pop_a = max(float(pops[a]), 1e-9)
         pop_b = max(float(pops[b]), 1e-9)
@@ -231,7 +231,7 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
 
     if p_0 % target_district_pop != 0 or p_0 == 0:
         next_multiple = (np.floor(p_0 / target_district_pop)+1) * target_district_pop
-        adjacent_indices = find_adjacent_indices() # todo should use graph to find indices of all tracts in t_1 adjacent to any tract in t_0
+        adjacent_indices = {u for u in t_1_indices if any(v in t_0_indices for v in graph.neighbors(u))} #https://chatgpt.com/s/t_68f9acc4b1188191830c128f76c4373e
 
         # Find medoids for both clusters
         m_0_idx = find_best_medoid(t_0_indices, dist_matrix)
@@ -257,10 +257,14 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
             if p_0 >= next_multiple:
                 break
             if idx in adjacent_indices:
-                transferred.append(idx) #todo replace this with something that removes the idx from t_1_indices and adds it to t_0 indices
+                t_1_indices.remove(idx)
+                adjacent_indices.remove(idx)
+                t_0_indices.append(idx)
                 p_0 += pops[idx]
                 p_1 -= pops[idx]
-                add_new_adjacent_indices(graph, t_0_indices, adjacent_indices, idx) #todo should remove idx from adjacent_indices but in turn add elements to adjacent_indices which represent tracts that are adjacent to idx tract but not members of t_0_indices
+                for candidate in graph.neighbors(idx):
+                    if candidate in t_1_indices and candidate not in adjacent_indices:
+                        adjacent_indices.add(candidate)
 
         # Update clusters
         # if transferred:
@@ -307,10 +311,10 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
                 {'county_geoid': geoids[i], 'lat': lats[i], 'lon': lons[i], 'pop': pops[i]}
                 for i in cluster_indices
             ]
-            cluster_dist_matrix, cluster_geoids, cluster_lats, cluster_lons, cluster_pops = build_distance_matrix(cluster_tracts)
+            cluster_dist_matrix, cluster_geoids, cluster_lats, cluster_lons, cluster_pops, _graph = build_distance_matrix(cluster_tracts)
             # Create new indices for the cluster (0 to n-1)
             cluster_tract_indices = list(range(len(cluster_indices)))
-            recursive_split(cluster_tract_indices, cluster_dist_matrix, cluster_geoids, cluster_pops, cluster_lats, cluster_lons, cluster_n, cluster_pop, cluster_name_new, all_results)
+            recursive_split(cluster_tract_indices, cluster_dist_matrix, cluster_geoids, cluster_pops, cluster_lats, cluster_lons, cluster_n, cluster_pop, cluster_name_new, all_results, graph)
         
 
 
