@@ -97,8 +97,8 @@ def build_distance_matrix(tracts):
     
     for a, b in tqdm(edges, desc="  Adding weighted edges", unit="edge", leave=False):
         dist = haversine(lats[a], lons[a], lats[b], lons[b])
-        pop_a = max(pops[a], 1e-9)
-        pop_b = max(pops[b], 1e-9)
+        pop_a = max(float(pops[a]), 1e-9)
+        pop_b = max(float(pops[b]), 1e-9)
         weight = ((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2
         G.add_edge(a, b, weight=weight)
     
@@ -299,48 +299,108 @@ def insert_districts(assignments):
     print("Insert complete.")
 
 
+def assign_zero_pop_tracts(zero_pop_tracts, assigned_tracts, dist_matrix, geoids):
+    """Assign zero-population tracts to their nearest assigned tract's district.
+
+    - zero_pop_tracts: list of tract dicts from DB (with 'county_geoid')
+    - assigned_tracts: list of assignment dicts returned by recursive_split (with 'geoid' and 'parent')
+    - dist_matrix, geoids: full distance matrix and corresponding geoids
+    """
+    if not zero_pop_tracts:
+        return []
+
+    geoid_to_idx = {g: i for i, g in enumerate(geoids)}
+    # Map assigned geoid -> parent district
+    geoid_to_parent = {a['geoid']: a['parent'] for a in assigned_tracts}
+
+    assignments = []
+    for tract in tqdm(zero_pop_tracts, desc="  Assigning zero-pop tracts", unit="tract", leave=False):
+        zg = tract['county_geoid']
+        if zg not in geoid_to_idx:
+            continue
+        zi = geoid_to_idx[zg]
+        # find nearest assigned tract
+        min_d = np.inf
+        nearest_parent = None
+        for a in assigned_tracts:
+            ag = a['geoid']
+            if ag not in geoid_to_idx:
+                continue
+            ai = geoid_to_idx[ag]
+            d = dist_matrix[zi, ai]
+            if d < min_d:
+                min_d = d
+                nearest_parent = a['parent']
+        if nearest_parent is not None:
+            assignments.append({
+                'geoid': zg,
+                'type': '11',
+                'parent': nearest_parent,
+                'medioid': False
+            })
+    return assignments
+
+
 def main():
     total_start = time.time()
-    
+
     print(f"=== New York State Congressional District Assignment ===")
     print(f"Target: {N_DISTRICTS} districts\n")
-    
+
     # Create table
     create_district_table()
-    
+
     # Fetch all NY tract centroids
     print("[Step 1] Fetching tract centroids for New York State (FIPS 36)...")
-    tracts = fetch_ny_tract_centroids()
-    print(f"  Found {len(tracts)} tracts")
-    
-    if len(tracts) == 0:
+    all_tracts = fetch_ny_tract_centroids()
+    print(f"  Found {len(all_tracts)} tracts")
+
+    if len(all_tracts) == 0:
         print("No tracts found. Exiting.")
         return
-    
-    total_pop = sum(row['pop'] for row in tracts)
-    print(f"  Total population: {total_pop:.0f}")
+
+    # Separate zero-population tracts from populated tracts
+    zero_pop_tracts = [t for t in all_tracts if t.get('pop', 0) == 0]
+    populated_tracts = [t for t in all_tracts if t.get('pop', 0) > 0]
+
+    print(f"  Zero-population tracts: {len(zero_pop_tracts)}")
+    print(f"  Populated tracts: {len(populated_tracts)}")
+
+    if len(populated_tracts) == 0:
+        print("No populated tracts found. Exiting.")
+        return
+
+    total_pop = sum(t['pop'] for t in populated_tracts)
+    print(f"  Total population (populated tracts): {total_pop:.0f}")
     print(f"  Target district population: {total_pop / N_DISTRICTS:.0f}\n")
-    
-    # Build distance matrix (computed once, reused throughout recursion)
-    print("[Step 2] Building distance matrix...")
-    dist_matrix, geoids, lats, lons, pops = build_distance_matrix(tracts)
+
+    # Build distance matrix for populated tracts only
+    print("[Step 2] Building distance matrix for populated tracts...")
+    dist_matrix, geoids, lats, lons, pops = build_distance_matrix(populated_tracts)
     print()
-    
-    # Run recursive splitting
-    print("[Step 3] Running recursive K-Medoids clustering...")
-    all_tract_indices = list(range(len(tracts)))
+
+    # Run recursive splitting on populated tracts only
+    print("[Step 3] Running recursive K-Medoids clustering on populated tracts...")
+    all_tract_indices = list(range(len(populated_tracts)))
     results = []
     recursive_split(all_tract_indices, dist_matrix, geoids, pops, N_DISTRICTS, total_pop, "", results)
-    print(f"\n  Total tracts assigned: {len(results)}")
-    
-    # Insert into database
-    print("\n[Step 4] Inserting results into database...")
-    insert_districts(results)
-    
+    print(f"\n  Total populated tracts assigned: {len(results)}")
+
+    # If there are zero-pop tracts, build full distance matrix and assign them
+    all_results = results
+    if zero_pop_tracts:
+        print(f"\n[Step 4] Assigning {len(zero_pop_tracts)} zero-population tracts to nearest neighbors...")
+        full_dist_matrix, full_geoids, _, _, _ = build_distance_matrix(all_tracts)
+        zero_assign = assign_zero_pop_tracts(zero_pop_tracts, results, full_dist_matrix, full_geoids)
+        all_results = results + zero_assign
+
+    # Insert all assignments into DB
+    print(f"\n[Step 5] Inserting {len(all_results)} tract assignments into database...")
+    insert_districts(all_results)
+
     total_elapsed = time.time() - total_start
     print(f"\n=== Complete in {total_elapsed:.2f} seconds ===")
 
 
 if __name__ == "__main__":
     main()
-
