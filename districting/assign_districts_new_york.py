@@ -23,7 +23,7 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district_ny4"
+DISTRICT_TABLE = "district_ny5"
 
 # Number of congressional districts to create for New York State
 N_DISTRICTS = 26  # Can be changed to any integer >= 2
@@ -124,7 +124,7 @@ def build_distance_matrix(tracts):
     max_dist = np.nanmax(dist_matrix[~np.isinf(dist_matrix)]) if np.any(~np.isinf(dist_matrix)) else 0
     print(f"  Max finite distance in matrix: {max_dist:.2e}")
     
-    return dist_matrix, geoids, lats, lons, pops
+    return dist_matrix, geoids, lats, lons, pops, G
 
 
 def find_best_medoid(cluster_indices, dist_matrix):
@@ -142,7 +142,7 @@ def find_best_medoid(cluster_indices, dist_matrix):
     return best_idx
 
 
-def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_districts, total_pop, cluster_name, all_results):
+def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_districts, total_pop, cluster_name, all_results, graph):
     """
     Recursively split tracts into districts using binary K-Medoids.
 
@@ -231,6 +231,7 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
 
     if p_0 % target_district_pop != 0 or p_0 == 0:
         next_multiple = (np.floor(p_0 / target_district_pop)+1) * target_district_pop
+        adjacent_indices = find_adjacent_indices() # todo should use graph to find indices of all tracts in t_1 adjacent to any tract in t_0
 
         # Find medoids for both clusters
         m_0_idx = find_best_medoid(t_0_indices, dist_matrix)
@@ -255,16 +256,18 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
         for r_1, idx in ratios:
             if p_0 >= next_multiple:
                 break
-            transferred.append(idx)
-            p_0 += pops[idx]
-            p_1 -= pops[idx]
+            if idx in adjacent_indices:
+                transferred.append(idx) #todo replace this with something that removes the idx from t_1_indices and adds it to t_0 indices
+                p_0 += pops[idx]
+                p_1 -= pops[idx]
+                add_new_adjacent_indices(graph, t_0_indices, adjacent_indices, idx) #todo should remove idx from adjacent_indices but in turn add elements to adjacent_indices which represent tracts that are adjacent to idx tract but not members of t_0_indices
 
         # Update clusters
-        if transferred:
-            t_0_indices.extend(transferred)
-            t_1_indices = [idx for idx in t_1_indices if idx not in transferred]
-            print(f"  Rebalanced: transferred {len(transferred)} tracts from {cn_1} to {cn_0}")
-            print(f"  After rebalancing: {cn_0} pop={p_0:.0f}, {cn_1} pop={p_1:.0f}")
+        # if transferred:
+        #     t_0_indices.extend(transferred)
+        #     t_1_indices = [idx for idx in t_1_indices if idx not in transferred]
+        #     print(f"  Rebalanced: transferred {len(transferred)} tracts from {cn_1} to {cn_0}")
+        #     print(f"  After rebalancing: {cn_0} pop={p_0:.0f}, {cn_1} pop={p_1:.0f}")
 
     # Determine how many districts each cluster should contain
     n_0 = round(p_0 / target_district_pop)
@@ -403,7 +406,7 @@ def main():
 
     # Build distance matrix for populated tracts only
     print("[Step 2] Building distance matrix for populated tracts...")
-    dist_matrix, geoids, lats, lons, pops = build_distance_matrix(populated_tracts)
+    dist_matrix, geoids, lats, lons, pops, graph = build_distance_matrix(populated_tracts)
     print()
 
     # Save the full distance matrix and geoids for all tracts (populated and zero-pop)
@@ -415,7 +418,7 @@ def main():
     print("[Step 3] Running recursive K-Medoids clustering on populated tracts...")
     all_tract_indices = list(range(len(populated_tracts)))
     results = []
-    recursive_split(all_tract_indices, dist_matrix, geoids, pops, lats, lons, N_DISTRICTS, total_pop, "", results)
+    recursive_split(all_tract_indices, dist_matrix, geoids, pops, lats, lons, N_DISTRICTS, total_pop, "", results, graph)
     print(f"\n  Total populated tracts assigned: {len(results)}")
 
     # If there are zero-pop tracts, assign them using the original distance matrix and geoids
