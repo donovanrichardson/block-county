@@ -23,7 +23,7 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district_ny"
+DISTRICT_TABLE = "district_ny4"
 
 # Number of congressional districts to create for New York State
 N_DISTRICTS = 26  # Can be changed to any integer >= 2
@@ -85,17 +85,28 @@ def build_distance_matrix(tracts):
     # Build Delaunay triangulation
     tri = Delaunay(coords_merc)
     edges = set()
+    max_edges = set()
+    # For each triangle, find its longest edge and collect all such edges
     for simplex in tqdm(tri.simplices, desc="  Building Delaunay edges", unit="triangle", leave=False):
+        tri_edges = []
         for i in range(3):
             a, b = simplex[i], simplex[(i+1)%3]
-            edges.add(tuple(sorted((a, b))))
-    
-    # Build graph with weighted edges
+            edge = tuple(sorted((a, b)))
+            length = haversine(lats[a], lons[a], lats[b], lons[b])
+            tri_edges.append((length, edge))
+            edges.add(edge)
+        # Find the longest edge in this triangle
+        max_edge = max(tri_edges, key=lambda x: x[0])[1]
+        max_edges.add(max_edge)
+
+    # Build graph with weighted edges, but skip all max edges from triangles
     G = nx.Graph()
     for i in range(n):
         G.add_node(i)
-    
+
     for a, b in tqdm(edges, desc="  Adding weighted edges", unit="edge", leave=False):
+        if (a, b) in max_edges:
+            continue  # skip all triangle max edges
         dist = haversine(lats[a], lons[a], lats[b], lons[b])
         pop_a = max(float(pops[a]), 1e-9)
         pop_b = max(float(pops[b]), 1e-9)
@@ -131,15 +142,17 @@ def find_best_medoid(cluster_indices, dist_matrix):
     return best_idx
 
 
-def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total_pop, cluster_name, all_results):
+def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_districts, total_pop, cluster_name, all_results):
     """
     Recursively split tracts into districts using binary K-Medoids.
-    
+
     Parameters:
     - tract_indices: list of indices (into dist_matrix) for tracts in this cluster
     - dist_matrix: full distance matrix for all tracts (computed once at the top level)
     - geoids: list of all tract geoids
     - pops: array of all tract populations
+    - lats: array of all tract latitudes
+    - lons: array of all tract longitudes
     - n_districts: number of districts this cluster should be split into (>= 2)
     - total_pop: total population of all input tracts (for calculating target district size)
     - cluster_name: string identifier for this cluster (e.g., "", "0", "01", etc.)
@@ -148,8 +161,10 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
     n_tracts = len(tract_indices)
     cluster_pop = sum(pops[i] for i in tract_indices)
     
+    split_start = time.time()
+
     print(f"[Split] Cluster '{cluster_name}' has {n_tracts} tracts, pop={cluster_pop:.0f}, target={n_districts} districts")
-    
+
     if n_tracts < 2:
         # Base case: only one tract, assign it
         idx = tract_indices[0]
@@ -160,21 +175,21 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
             'medioid': True  # Single tract is its own medoid
         })
         return
-    
+
     # Extract submatrix for this cluster
     sub_matrix = dist_matrix[np.ix_(tract_indices, tract_indices)]
-    
+
     # Run K-Medoids with k=2 to split into two clusters
     kmedoids = KMedoids(n_clusters=2, metric="precomputed", init="k-medoids++")
     sub_labels = kmedoids.fit_predict(sub_matrix)
-    
+
     # Map back to original indices
     cluster_0_indices = [tract_indices[i] for i in range(n_tracts) if sub_labels[i] == 0]
     cluster_1_indices = [tract_indices[i] for i in range(n_tracts) if sub_labels[i] == 1]
-    
+
     pop_0 = sum(pops[i] for i in cluster_0_indices)
     pop_1 = sum(pops[i] for i in cluster_1_indices)
-    
+
     # Label the smaller cluster as t_0, larger as t_1
     if pop_0 <= pop_1:
         t_0_indices = cluster_0_indices
@@ -186,17 +201,18 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
         t_1_indices = cluster_0_indices
         p_0 = pop_1
         p_1 = pop_0
-    
+
     cn_0 = cluster_name + "0"
     cn_1 = cluster_name + "1"
-    
+
     print(f"  Initial split: cluster {cn_0} pop={p_0:.0f}, cluster {cn_1} pop={p_1:.0f}")
 
     # Rebalancing step
     # Target district population
     target_district_pop = total_pop / n_districts
-    
-    # Check if p_0 needs rebalancing
+
+    # todo do not remove the below comment
+    #  Check if p_0 needs rebalancing
     # "until p_0 reaches at or beyond the next mod (p_t/n)" means:
     # We want p_0 to be a multiple of target_district_pop.
     # If p_0 is not exactly a multiple, we transfer tracts from t_1 to t_0
@@ -215,7 +231,7 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
 
     if p_0 % target_district_pop != 0 or p_0 == 0:
         next_multiple = (np.floor(p_0 / target_district_pop)+1) * target_district_pop
-        
+
         # Find medoids for both clusters
         m_0_idx = find_best_medoid(t_0_indices, dist_matrix)
         m_1_idx = find_best_medoid(t_1_indices, dist_matrix)
@@ -249,18 +265,21 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
             t_1_indices = [idx for idx in t_1_indices if idx not in transferred]
             print(f"  Rebalanced: transferred {len(transferred)} tracts from {cn_1} to {cn_0}")
             print(f"  After rebalancing: {cn_0} pop={p_0:.0f}, {cn_1} pop={p_1:.0f}")
-    
+
     # Determine how many districts each cluster should contain
-    # Round to nearest integer based on population proportion
     n_0 = round(p_0 / target_district_pop)
     n_1 = round(p_1 / target_district_pop)
-    
-    # Ensure at least 1 district per cluster if it has tracts todo even though all should have tracts and population
+
+    # Ensure at least 1 district per cluster if it has tracts
     n_0 = max(1, n_0) if t_0_indices else 0
     n_1 = max(1, n_1) if t_1_indices else 0
 
     print(f"  Cluster {cn_0} will have {n_0} districts, cluster {cn_1} will have {n_1} districts")
+
+    split_elapsed = time.time() - split_start
     
+    print(f"  Split completed in {split_elapsed:.2f} seconds.")
+
     # Process each cluster
     for cluster_indices, cluster_pop, cluster_n, cluster_name_new in [
         (t_0_indices, p_0, n_0, cn_0),
@@ -280,8 +299,16 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
                     'medioid': (idx == medoid_idx)
                 })
         else:
-            # This cluster needs further splitting
-            recursive_split(cluster_indices, dist_matrix, geoids, pops, cluster_n, cluster_pop, cluster_name_new, all_results)
+            # This cluster needs further splitting - rebuild distance matrix for this cluster
+            cluster_tracts = [
+                {'county_geoid': geoids[i], 'lat': lats[i], 'lon': lons[i], 'pop': pops[i]}
+                for i in cluster_indices
+            ]
+            cluster_dist_matrix, cluster_geoids, cluster_lats, cluster_lons, cluster_pops = build_distance_matrix(cluster_tracts)
+            # Create new indices for the cluster (0 to n-1)
+            cluster_tract_indices = list(range(len(cluster_indices)))
+            recursive_split(cluster_tract_indices, cluster_dist_matrix, cluster_geoids, cluster_pops, cluster_lats, cluster_lons, cluster_n, cluster_pop, cluster_name_new, all_results)
+        
 
 
 def insert_districts(assignments):
@@ -379,19 +406,24 @@ def main():
     dist_matrix, geoids, lats, lons, pops = build_distance_matrix(populated_tracts)
     print()
 
+    # Save the full distance matrix and geoids for all tracts (populated and zero-pop)
+    # This is used for nearest neighbor assignment for zero-pop tracts
+    all_geoids = geoids
+    all_dist_matrix = dist_matrix
+
     # Run recursive splitting on populated tracts only
     print("[Step 3] Running recursive K-Medoids clustering on populated tracts...")
     all_tract_indices = list(range(len(populated_tracts)))
     results = []
-    recursive_split(all_tract_indices, dist_matrix, geoids, pops, N_DISTRICTS, total_pop, "", results)
+    recursive_split(all_tract_indices, dist_matrix, geoids, pops, lats, lons, N_DISTRICTS, total_pop, "", results)
     print(f"\n  Total populated tracts assigned: {len(results)}")
 
-    # If there are zero-pop tracts, build full distance matrix and assign them
+    # If there are zero-pop tracts, assign them using the original distance matrix and geoids
     all_results = results
     if zero_pop_tracts:
         print(f"\n[Step 4] Assigning {len(zero_pop_tracts)} zero-population tracts to nearest neighbors...")
-        full_dist_matrix, full_geoids, _, _, _ = build_distance_matrix(all_tracts)
-        zero_assign = assign_zero_pop_tracts(zero_pop_tracts, results, full_dist_matrix, full_geoids)
+        # Use the original distance matrix and geoids for nearest neighbor assignment
+        zero_assign = assign_zero_pop_tracts(zero_pop_tracts, results, all_dist_matrix, all_geoids)
         all_results = results + zero_assign
 
     # Insert all assignments into DB
