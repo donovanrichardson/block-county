@@ -191,7 +191,7 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
     cn_1 = cluster_name + "1"
     
     print(f"  Initial split: cluster {cn_0} pop={p_0:.0f}, cluster {cn_1} pop={p_1:.0f}")
-    
+
     # Rebalancing step
     # Target district population
     target_district_pop = total_pop / n_districts
@@ -201,13 +201,25 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
     # We want p_0 to be a multiple of target_district_pop.
     # If p_0 is not exactly a multiple, we transfer tracts from t_1 to t_0
     # until p_0 >= next_multiple, where next_multiple = ceil(p_0 / target_district_pop) * target_district_pop
-    if p_0 % target_district_pop != 0:
-        next_multiple = np.ceil(p_0 / target_district_pop) * target_district_pop
+
+    # llm says:
+    # It's valid Python but fragile: using `%` with a float and comparing to zero can fail due to floating-point error. Use a tolerance (or `np.isclose`) instead.
+    #
+    # ```python
+    # # use a small tolerance to avoid floating-point equality issues
+    # tol = 1e-6
+    # if p_0 > 0 and not np.isclose(p_0 % target_district_pop, 0, atol=tol):
+    #     # rebalancing logic...
+    #     ...
+    # ```
+
+    if p_0 % target_district_pop != 0 or p_0 == 0:
+        next_multiple = (np.floor(p_0 / target_district_pop)+1) * target_district_pop
         
         # Find medoids for both clusters
         m_0_idx = find_best_medoid(t_0_indices, dist_matrix)
         m_1_idx = find_best_medoid(t_1_indices, dist_matrix)
-        
+
         # Calculate d_0 and d_1 for all tracts in t_1
         ratios = []
         for idx in t_1_indices:
@@ -218,10 +230,10 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
             else:
                 r_1 = 0 if d_1 == 0 else np.inf
             ratios.append((r_1, idx))
-        
+
         # Sort by r_1 descending (highest r_1 = closest to m_0 relative to m_1)
         ratios.sort(reverse=True)
-        
+
         # Transfer tracts from t_1 to t_0 until p_0 reaches the next multiple
         transferred = []
         for r_1, idx in ratios:
@@ -230,7 +242,7 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
             transferred.append(idx)
             p_0 += pops[idx]
             p_1 -= pops[idx]
-        
+
         # Update clusters
         if transferred:
             t_0_indices.extend(transferred)
@@ -243,10 +255,10 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
     n_0 = round(p_0 / target_district_pop)
     n_1 = round(p_1 / target_district_pop)
     
-    # Ensure at least 1 district per cluster if it has tracts
+    # Ensure at least 1 district per cluster if it has tracts todo even though all should have tracts and population
     n_0 = max(1, n_0) if t_0_indices else 0
     n_1 = max(1, n_1) if t_1_indices else 0
-    
+
     print(f"  Cluster {cn_0} will have {n_0} districts, cluster {cn_1} will have {n_1} districts")
     
     # Process each cluster
@@ -256,7 +268,7 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
     ]:
         if not cluster_indices:
             continue
-            
+
         if cluster_n == 1:
             # This cluster represents exactly 1 district, finalize it
             medoid_idx = find_best_medoid(cluster_indices, dist_matrix)
