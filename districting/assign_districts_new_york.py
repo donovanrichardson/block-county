@@ -211,8 +211,8 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
     # Target district population
     target_district_pop = total_pop / n_districts
 
-    # todo do not remove the below comment
-    #  Check if p_0 needs rebalancing
+    # do not remove the below comment
+    # Check if p_0 needs rebalancing
     # "until p_0 reaches at or beyond the next mod (p_t/n)" means:
     # We want p_0 to be a multiple of target_district_pop.
     # If p_0 is not exactly a multiple, we transfer tracts from t_1 to t_0
