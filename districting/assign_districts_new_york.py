@@ -256,23 +256,16 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
         for r_1, idx in ratios:
             if p_0 >= next_multiple:
                 break
-            # if idx in adjacent_indices:
-            if True in adjacent_indices:
-                t_1_indices.remove(idx)
-                # adjacent_indices.remove(idx)
-                t_0_indices.append(idx)
-                p_0 += pops[idx]
-                p_1 -= pops[idx]
-                # for candidate in graph.neighbors(idx):
-                #     if candidate in t_1_indices and candidate not in adjacent_indices:
-                #         adjacent_indices.add(candidate)
+            transferred.append(idx)
+            p_0 += pops[idx]
+            p_1 -= pops[idx]
 
         # Update clusters
-        # if transferred:
-        #     t_0_indices.extend(transferred)
-        #     t_1_indices = [idx for idx in t_1_indices if idx not in transferred]
-        #     print(f"  Rebalanced: transferred {len(transferred)} tracts from {cn_1} to {cn_0}")
-        #     print(f"  After rebalancing: {cn_0} pop={p_0:.0f}, {cn_1} pop={p_1:.0f}")
+        if transferred:
+            t_0_indices.extend(transferred)
+            t_1_indices = [idx for idx in t_1_indices if idx not in transferred]
+            print(f"  Rebalanced: transferred {len(transferred)} tracts from {cn_1} to {cn_0}")
+            print(f"  After rebalancing: {cn_0} pop={p_0:.0f}, {cn_1} pop={p_1:.0f}")
 
     # Determine how many districts each cluster should contain
     n_0 = round(p_0 / target_district_pop)
