@@ -281,7 +281,7 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
                 })
         else:
             # This cluster needs further splitting
-            recursive_split(cluster_indices, dist_matrix, geoids, pops, cluster_n, total_pop, cluster_name_new, all_results)
+            recursive_split(cluster_indices, dist_matrix, geoids, pops, cluster_n, cluster_pop, cluster_name_new, all_results)
 
 
 def insert_districts(assignments):
