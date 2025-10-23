@@ -23,7 +23,7 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district_ny7"
+DISTRICT_TABLE = "ny_districts1"
 
 # Number of congressional districts to create for New York State
 N_DISTRICTS = 26  # Can be changed to any integer >= 2
@@ -242,10 +242,10 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
         for idx in t_1_indices:
             d_0 = dist_matrix[idx, m_0_idx]
             d_1 = dist_matrix[idx, m_1_idx]
-            if d_0 > 0:
-                r_1 = d_1 / d_0
-            else:
-                r_1 = 0 if d_1 == 0 else np.inf
+            # if d_0 > 0: 
+            r_1 = (d_1 + d_0) * (d_1/d_0)
+            # else:
+            #     r_1 = 0 if d_1 == 0 else np.inf
             ratios.append((r_1, idx))
 
         # Sort by r_1 descending (highest r_1 = closest to m_0 relative to m_1)
@@ -256,15 +256,16 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
         for r_1, idx in ratios:
             if p_0 >= next_multiple:
                 break
-            if idx in adjacent_indices:
+            # if idx in adjacent_indices:
+            if True in adjacent_indices:
                 t_1_indices.remove(idx)
-                adjacent_indices.remove(idx)
+                # adjacent_indices.remove(idx)
                 t_0_indices.append(idx)
                 p_0 += pops[idx]
                 p_1 -= pops[idx]
-                for candidate in graph.neighbors(idx):
-                    if candidate in t_1_indices and candidate not in adjacent_indices:
-                        adjacent_indices.add(candidate)
+                # for candidate in graph.neighbors(idx):
+                #     if candidate in t_1_indices and candidate not in adjacent_indices:
+                #         adjacent_indices.add(candidate)
 
         # Update clusters
         # if transferred:
