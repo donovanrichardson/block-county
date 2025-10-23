@@ -49,7 +49,7 @@ def fetch_ny_tract_centroids():
         cur.execute(f"""
             SELECT county_geoid, ST_Y(centroid_geom) AS lat, ST_X(centroid_geom) AS lon, pop
             FROM {SCHEMA}.{CENTROID_TABLE}
-            WHERE type = '11' AND county_geoid LIKE '36059%'
+            WHERE type = '11' AND county_geoid LIKE '36%'
         """)
         return cur.fetchall()
 
