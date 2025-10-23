@@ -23,7 +23,7 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district_ny"
+DISTRICT_TABLE = "district_ny2"
 
 # Number of congressional districts to create for New York State
 N_DISTRICTS = 26  # Can be changed to any integer >= 2
@@ -220,23 +220,19 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, n_districts, total
         m_0_idx = find_best_medoid(t_0_indices, dist_matrix)
         m_1_idx = find_best_medoid(t_1_indices, dist_matrix)
 
-        # Calculate d_0 and d_1 for all tracts in t_1
-        ratios = []
+        # Calculate d_0 for all tracts in t_1
+        # We want to transfer tracts closest to cluster 0's medoid
+        distances = []
         for idx in t_1_indices:
             d_0 = dist_matrix[idx, m_0_idx]
-            d_1 = dist_matrix[idx, m_1_idx]
-            if d_0 > 0:
-                r_1 = d_1 / d_0
-            else:
-                r_1 = 0 if d_1 == 0 else np.inf
-            ratios.append((r_1, idx))
+            distances.append((d_0, idx))
 
-        # Sort by r_1 descending (highest r_1 = closest to m_0 relative to m_1)
-        ratios.sort(reverse=True)
+        # Sort by d_0 ascending (lowest d_0 = closest to m_0)
+        distances.sort()
 
         # Transfer tracts from t_1 to t_0 until p_0 reaches the next multiple
         transferred = []
-        for r_1, idx in ratios:
+        for d_0, idx in distances:
             if p_0 >= next_multiple:
                 break
             transferred.append(idx)
@@ -343,4 +339,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
