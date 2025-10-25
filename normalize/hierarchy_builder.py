@@ -12,6 +12,7 @@ Usage:
 
 import sys
 import psycopg2
+from InquirerPy.base import Choice
 from psycopg2.extras import RealDictCursor
 from collections import defaultdict
 from InquirerPy import inquirer
@@ -110,7 +111,7 @@ def drill_down_to_leaf(cur, hierarchy):
         return None
     
     # Display level 0 options - create tuples of (display, value)
-    choices = [(f"ID: {r['id']}, Label: {r['label']}, Pop: {r['pop']}", r['id']) for r in level_zero]
+    choices = [Choice(r['id'], name=f"ID: {r['id']}, Label: {r['label']}, Pop: {r['pop']}") for r in level_zero]
     
     selected_id = inquirer.select(
         message=f"Select level-0 record for hierarchy '{hierarchy}':",
@@ -129,10 +130,10 @@ def drill_down_to_leaf(cur, hierarchy):
             # This is a leaf node
             return current_id
         
-        # Present children for selection - create tuples of (display, value)
-        choices = [(f"ID: {r['id']}, Level: {r['level']}, Label: {r['label']}, Pop: {r['pop']}", r['id']) for r in children]
-        choices.append(("** Select this record (stop drilling) **", "__stop__"))
-        choices.append(("** Go back **", "__back__"))
+        # Present children for selection - use Choice objects with value and name
+        choices = [Choice(r['id'], name=f"ID: {r['id']}, Level: {r['level']}, Label: {r['label']}, Pop: {r['pop']}") for r in children]
+        choices.append(Choice("__stop__", name="** Select this record (stop drilling) **"))
+        choices.append(Choice("__back__", name="** Go back **"))
         
         selection = inquirer.select(
             message=f"Children of {current_id} (or select this record as parent):",
@@ -284,11 +285,12 @@ def main():
             print("\nStep 4: Fetching centroids within parent geometry...")
             cur.execute(f"SELECT ST_AsBinary(geom) FROM {SCHEMA}.{HLL_TABLE} WHERE id = %s;", (parent_id,))
             parent_geom_row = cur.fetchone()
-            if not parent_geom_row or not parent_geom_row[0]:
+            print(parent_geom_row)
+            if not parent_geom_row or not parent_geom_row['st_asbinary']:
                 print("Could not fetch parent geometry. Exiting.")
                 return
             
-            parent_geom_wkb = parent_geom_row[0]
+            parent_geom_wkb = parent_geom_row['st_asbinary']
             centroids = get_centroids_within_geometry(cur, parent_geom_wkb, centroid_level)
             
             if not centroids:
@@ -316,7 +318,7 @@ def main():
             # Group assignments by label
             label_groups = defaultdict(list)
             for assignment in assignments:
-                label_groups[assignment['parent']].append(assignment)
+                label_groups[assignment['label']].append(assignment)
             
             # Get the geometry table info for this centroid level
             level_info = CENTROID_LEVEL_MAP[centroid_level]
@@ -345,12 +347,13 @@ def main():
                         """, (geoids,))
                     
                     merged_geom_row = cur.fetchone()
-                    if not merged_geom_row or not merged_geom_row[0]:
+                    print(merged_geom_row)
+                    if not merged_geom_row or not merged_geom_row['merged_geom']:
                         print(f"Warning: Could not merge geometries for label {label}, skipping.")
                         pbar.update(1)
                         continue
                     
-                    merged_geom_wkb = merged_geom_row[0]
+                    merged_geom_wkb = merged_geom_row['merged_geom']
                     
                     # Get centroid_geom from the medioid
                     centroid_geom_wkb = None
@@ -361,17 +364,23 @@ def main():
                             WHERE county_geoid = %s AND type = %s;
                         """, (medioid_geoid, centroid_level))
                         centroid_row = cur.fetchone()
+                        print(centroid_row)
                         if centroid_row:
-                            centroid_geom_wkb = centroid_row[0]
-                    
+                            centroid_geom_wkb = centroid_row['st_asbinary']
+
+                    for item in (parent_id, hierarchy, new_level, label, merged_geom_wkb, centroid_geom_wkb, total_pop):
+                        print(item, type(item))
+                            
                     # Insert into hll
                     cur.execute(f"""
                         INSERT INTO {SCHEMA}.{HLL_TABLE} (id, parent, hierarchy, level, label, geom, centroid_geom, pop)
                         VALUES (gen_random_uuid()::text, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id;
-                    """, (parent_id, hierarchy, new_level, label, merged_geom_wkb, centroid_geom_wkb, total_pop))
-                    
-                    new_id = cur.fetchone()[0]
+                    """, (parent_id, hierarchy, new_level, int(label), merged_geom_wkb, centroid_geom_wkb, int(total_pop)))
+
+                    fetchone = cur.fetchone()
+                    print(fetchone)
+                    new_id = fetchone['id']
                     pbar.update(1)
             
             print(f"Successfully inserted {len(label_groups)} child records.")

@@ -116,6 +116,9 @@ def _cluster_tracts(tracts, n_clusters, parent_label):
     for i in tqdm(range(n), desc="Building distance matrix (rows)", unit="row"):
         for j in range(n):
             dist_matrix[i, j] = sp_length[i][j] if j in sp_length[i] else np.inf
+            if dist_matrix[i, j] == np.inf:
+                print(f"dist matrix at{geoids[i]} and {geoids[j]} is inf")
+                dist_matrix[i, j] = np.finfo(np.float64).max  # Replace inf with a large finite number
     
     # Diagnostic: print largest value in dist_matrix
     print("Max value in dist_matrix:", np.nanmax(dist_matrix))
@@ -151,7 +154,7 @@ def _cluster_tracts(tracts, n_clusters, parent_label):
         results.append({
             'geoid': geoid,
             'type': '11',
-            'label': f"r{parent_label}r{labels[i]}",
+            'label': labels[i],
             'medioid': geoid in medoid_geoids,
             'pop': pops[i]
         })
