@@ -17,6 +17,7 @@ rtree = "*"
 scikit-learn-extra = "*"
 numpy = "<2"
 networkx = "*"
+pymetis = "*"
 
 [dev-packages]
 

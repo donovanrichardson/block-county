@@ -13,6 +13,7 @@ from scipy.spatial import Delaunay
 from pyproj import Transformer
 from tqdm import tqdm
 import time
+import pymetis
 
 DB_CRED = {
     "host": "localhost",
@@ -23,9 +24,10 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "ny_districts1"
+DISTRICT_TABLE = "ny_metis"
 
 # Number of congressional districts to create for New York State
+# N_DISTRICTS = 9  # Can be changed to any integer >= 2
 N_DISTRICTS = 26  # Can be changed to any integer >= 2
 
 
@@ -64,7 +66,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * np.arcsin(np.sqrt(a))
 
 
-def build_distance_matrix(tracts):
+def build_graph(tracts):
     """
     Build a weighted distance matrix using Delaunay triangulation and Dijkstra shortest paths.
     Returns the distance matrix and tract metadata.
@@ -96,8 +98,8 @@ def build_distance_matrix(tracts):
             tri_edges.append((length, edge))
             edges.add(edge)
         # Find the longest edge in this triangle
-        # max_edge = max(tri_edges, key=lambda x: x[0])[1]
-        # max_edges.add(max_edge)
+        max_edge = max(tri_edges, key=lambda x: x[0])[1]
+        max_edges.add(max_edge)
 
     # Build graph with weighted edges, but skip all max edges from triangles
     G = nx.Graph()
@@ -105,26 +107,33 @@ def build_distance_matrix(tracts):
         G.add_node(i)
 
     for a, b in tqdm(edges, desc="  Adding weighted edges", unit="edge", leave=False):
-        # if (a, b) in max_edges:
-        #     continue  # skip all triangle max edges
+        if (a, b) in max_edges:
+            continue  # skip all triangle max edges to make urquhart graph
         dist = haversine(lats[a], lons[a], lats[b], lons[b])
         pop_a = max(float(pops[a]), 1e-9)
         pop_b = max(float(pops[b]), 1e-9)
-        weight = ((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2
+        weight = 1/((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))
         G.add_edge(a, b, weight=weight)
+
+    w_min = min(d.get('weight') for _, _, d in G.edges(data=True))
+    for u, v, d in G.edges(data=True):
+        scaled = int(np.floor(d['weight'] / w_min))
+        G[u][v]['weight'] = scaled
+
+    xadj = [0]
+    adjncy = []
+    eweights = []
     
-    # Compute all-pairs shortest paths
-    sp_length = dict(nx.all_pairs_dijkstra_path_length(G, weight="weight"))
-    dist_matrix = np.zeros((n, n))
-    for i in tqdm(range(n), desc="  Building distance matrix", unit="row", leave=False):
-        for j in range(n):
-            dist_matrix[i, j] = sp_length[i][j] if j in sp_length[i] else np.inf
+    for u in list(G.nodes()):
+        start_len = len(adjncy)
+        for v in G.neighbors(u):
+            adjncy.append(v)
+            # Edge weight must be a positive integer for Metis
+            w = G[u][v].get("weight")
+            eweights.append(w)
+        xadj.append(len(adjncy))
     
-    # Diagnostic output
-    max_dist = np.nanmax(dist_matrix[~np.isinf(dist_matrix)]) if np.any(~np.isinf(dist_matrix)) else 0
-    print(f"  Max finite distance in matrix: {max_dist:.2e}")
-    
-    return dist_matrix, geoids, lats, lons, pops, G
+    return geoids, lats, lons, pops, G, xadj, adjncy, eweights, pops
 
 
 def find_best_medoid(cluster_indices, dist_matrix):
@@ -314,15 +323,15 @@ def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_dist
 
 def insert_districts(assignments):
     """Insert district assignments into the database."""
-    print(f"\n[Insert] Inserting {len(assignments)} tract assignments into {DISTRICT_TABLE}...")
+    print(f"\n[Insert] Inserting {len(assignments)} tract assignments into {DISTRICT_TABLE}...") # in the future i may want to insert a medioid again
     with psycopg2.connect(**DB_CRED) as conn, conn.cursor() as cur:
-        for row in tqdm(assignments, desc="Inserting", unit="tract"):
+        for k, v in assignments.items():
             cur.execute(f"""
                 INSERT INTO {SCHEMA}.{DISTRICT_TABLE} (geoid, type, parent, medioid)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (geoid) DO UPDATE
                 SET parent = EXCLUDED.parent, medioid = EXCLUDED.medioid, type = EXCLUDED.type;
-            """, (row['geoid'], row['type'], row['parent'], row['medioid']))
+            """, (k, "11", v, False))
         conn.commit()
     print("Insert complete.")
 
@@ -403,36 +412,46 @@ def main():
     print(f"  Target district population: {total_pop / N_DISTRICTS:.0f}\n")
 
     # Build distance matrix for populated tracts only
-    print("[Step 2] Building distance matrix for populated tracts...")
-    dist_matrix, geoids, lats, lons, pops, graph = build_distance_matrix(populated_tracts)
+    print("[Step 2] Building graph for populated tracts...")
+    geoids, lats, lons, pops, graph, xadj, adjncy, eweights, vweights = build_graph(populated_tracts)
     print()
 
     # Save the full distance matrix and geoids for all tracts (populated and zero-pop)
     # This is used for nearest neighbor assignment for zero-pop tracts
     all_geoids = geoids
-    all_dist_matrix = dist_matrix
+
+    cut_cost, parts = pymetis.part_graph(
+        nparts=N_DISTRICTS,
+        xadj=xadj,
+        adjncy=adjncy,
+        vweights=vweights,
+        eweights=eweights,
+        contiguous=True,      # ensure each district is contiguous #todo DeprecationWarning
+        recursive=False       # k-way (default); set True to try recursive bisection
+    )
+
+    # Map back to node labels
+    part_of = {u: p for u, p in zip(geoids, parts)}
+    # return cut_cost, part_of
 
     # Run recursive splitting on populated tracts only
-    print("[Step 3] Running recursive K-Medoids clustering on populated tracts...")
-    all_tract_indices = list(range(len(populated_tracts)))
-    results = []
-    recursive_split(all_tract_indices, dist_matrix, geoids, pops, lats, lons, N_DISTRICTS, total_pop, "", results, graph)
-    print(f"\n  Total populated tracts assigned: {len(results)}")
-
-    # If there are zero-pop tracts, assign them using the original distance matrix and geoids
-    all_results = results
-    if zero_pop_tracts:
-        print(f"\n[Step 4] Assigning {len(zero_pop_tracts)} zero-population tracts to nearest neighbors...")
-        # Use the original distance matrix and geoids for nearest neighbor assignment
-        zero_assign = assign_zero_pop_tracts(zero_pop_tracts, results, all_dist_matrix, all_geoids)
-        all_results = results + zero_assign
-
+    print("[Step 3] Print output")
+    print(f"\n  {part_of}")
+    # 
+    # # If there are zero-pop tracts, assign them using the original distance matrix and geoids
+    # all_results = results
+    # if zero_pop_tracts:
+    #     print(f"\n[Step 4] Assigning {len(zero_pop_tracts)} zero-population tracts to nearest neighbors...")
+    #     # Use the original distance matrix and geoids for nearest neighbor assignment
+    #     zero_assign = assign_zero_pop_tracts(zero_pop_tracts, results, all_dist_matrix, all_geoids)
+    #     all_results = results + zero_assign
+    # 
     # Insert all assignments into DB
-    print(f"\n[Step 5] Inserting {len(all_results)} tract assignments into database...")
-    insert_districts(all_results)
-
-    total_elapsed = time.time() - total_start
-    print(f"\n=== Complete in {total_elapsed:.2f} seconds ===")
+    print(f"\n[Step 4] Inserting {len(part_of)} tract assignments into database...")
+    insert_districts(part_of)
+    # 
+    # total_elapsed = time.time() - total_start
+    # print(f"\n=== Complete in {total_elapsed:.2f} seconds ===")
 
 
 if __name__ == "__main__":
