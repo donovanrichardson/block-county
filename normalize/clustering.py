@@ -3,7 +3,6 @@
 Clustering utilities for tract sub-district assignment.
 """
 import psycopg2
-from psycopg2.extras import RealDictCursor
 import numpy as np
 from sklearn_extra.cluster import KMedoids
 import networkx as nx
@@ -75,12 +74,41 @@ def _cluster_tracts(tracts, n_clusters, parent_label):
     
     for a, b in tqdm(edges, desc="Adding edges to graph", unit="edge"):
         dist = haversine(lats[a], lons[a], lats[b], lons[b])
-        pop_a = max(pops[a], 1)
-        pop_b = max(pops[b], 1)
+        # Ensure pop values are Python floats to avoid type warnings with max()
+        pop_a = max(float(pops[a]), 1e-9)
+        pop_b = max(float(pops[b]), 1e-9)
         weight = ((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2
         # alt_weight = (((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2)/(pop_a+pop_b) #todo do not remove alt_weight comment
         G.add_edge(a, b, weight=weight)
-    
+
+    # For nodes with zero population, keep only their single shortest physical edge (by haversine distance),
+    # set that edge's weight to 0 so it doesn't contribute to path lengths, and remove any other incident edges.
+    # This ensures zero-pop nodes are attached to the graph by their closest neighbor only.
+    for i in tqdm(range(n), desc="Pruning zero-pop nodes", unit="node"):
+        if pops[i] <= 0:
+            incident = list(G.edges(i, data=True))  # list to avoid mutation issues while removing
+            if not incident:
+                continue
+            # Find the incident edge with the shortest haversine distance
+            min_dist = float('inf')
+            min_neighbor = None
+            for u, v, data in incident:
+                neighbor = v if u == i else u
+                d = data['weight']
+                if d < min_dist:
+                    min_dist = d
+                    min_neighbor = neighbor
+            # Set the chosen edge's weight to 0 (if it exists) and remove all other edges incident to i
+            if min_neighbor is not None and G.has_edge(i, min_neighbor):
+                # Use networkx helper to set edge attribute to avoid static type warnings
+                nx.set_edge_attributes(G, {(i, min_neighbor): {'weight': 0}})
+            for u, v, data in incident:
+                neighbor = v if u == i else u
+                if neighbor == min_neighbor:
+                    continue
+                if G.has_edge(i, neighbor):
+                    G.remove_edge(i, neighbor)
+
     sp_length = dict(nx.all_pairs_dijkstra_path_length(G, weight="weight"))
     dist_matrix = np.zeros((n, n))
     for i in tqdm(range(n), desc="Building distance matrix (rows)", unit="row"):
@@ -139,4 +167,3 @@ def _insert_subdistricts(assignments, db_cred, schema, district_table):
                 SET parent = EXCLUDED.parent, medioid = EXCLUDED.medioid;
             """, (row['geoid'], row['type'], row['parent'], row['medioid']))
         conn.commit()
-

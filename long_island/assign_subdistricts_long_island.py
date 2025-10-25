@@ -17,7 +17,7 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district_li2"
+DISTRICT_TABLE = "district_li3"
 BLOCK_TABLE = "blocks_2020"
 
 N_CLUSTERS = 4  # Default, can be changed per region
