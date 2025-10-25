@@ -38,7 +38,7 @@ def cluster_and_insert(tract_centroids, n_clusters, region_label, db_cred, schem
         schema: Database schema name
         district_table: District table name
     """
-    tract_centroids = [row for row in tract_centroids if row.get('pop', 0) > 0]
+    tract_centroids = [row for row in tract_centroids if row.get('aland', 0) > 0]
     
     # Cluster the tracts
     assignments = _cluster_tracts(tract_centroids, n_clusters, region_label)
@@ -75,9 +75,10 @@ def _cluster_tracts(tracts, n_clusters, parent_label):
     
     for a, b in tqdm(edges, desc="Adding edges to graph", unit="edge"):
         dist = haversine(lats[a], lons[a], lats[b], lons[b])
-        pop_a = max(pops[a], 1e-9)
-        pop_b = max(pops[b], 1e-9)
+        pop_a = max(pops[a], 1)
+        pop_b = max(pops[b], 1)
         weight = ((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2
+        # alt_weight = (((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2)/(pop_a+pop_b) #todo do not remove alt_weight comment
         G.add_edge(a, b, weight=weight)
     
     sp_length = dict(nx.all_pairs_dijkstra_path_length(G, weight="weight"))

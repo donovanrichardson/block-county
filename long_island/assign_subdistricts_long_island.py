@@ -6,7 +6,7 @@ Results are inserted into the 'district' table with type=11, geoid=tract geoid, 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
-from clustering import cluster_and_insert
+from normalize.clustering import cluster_and_insert
 
 DB_CRED = {
     "host": "localhost",
@@ -54,7 +54,7 @@ def fetch_tract_centroids(tract_geoids):
     with psycopg2.connect(**DB_CRED) as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         placeholders = ','.join(['%s'] * len(tract_geoids))
         cur.execute(f"""
-            SELECT county_geoid, ST_Y(centroid_geom) AS lat, ST_X(centroid_geom) AS lon, pop
+            SELECT county_geoid, ST_Y(centroid_geom) AS lat, ST_X(centroid_geom) AS lon, pop, aland, awater
             FROM {SCHEMA}.{CENTROID_TABLE}
             WHERE type = '11' AND county_geoid IN ({placeholders})
         """, tract_geoids)
