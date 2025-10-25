@@ -6,9 +6,9 @@ and summing county populations.
 Behavior:
 - Computes merged geometry from `public.counties_2020.geom` via a robust ST_Union
   (makes geometries valid, extracts polygons, forces MULTIPOLYGON, sets SRID 4269).
-- Computes total population by summing `pop` from `public.county_centroids2`.
-  Falls back to summing a `pop` column on `public.counties_2020` if the centroid
-  table or column is missing.
+- Computes total population by joining `public.county_centroids2` to `public.counties_2020`
+  on geoid and aggregating SUM(pop) per county (to avoid double-counting from smaller
+  centroid features). No fallback — both tables must exist and the join must succeed.
 - Inserts a single row into `public.hll` with:
     parent = NULL
     hierarchy = 'US'
@@ -29,6 +29,7 @@ Options:
 Notes:
 - Update DB_CRED at the top to match your environment, or run with env-configured DB.
 - Requires psycopg2 and PostGIS; script ensures PostGIS and pgcrypto extensions.
+- Requires `county_centroids2` and `counties_2020` tables to exist with a matching geoid column.
 """
 
 import argparse
@@ -63,54 +64,34 @@ def ensure_extensions(cur):
 
 
 def compute_total_population(cur):
-    """Sum population with a progress bar by streaming rows from the centroid table (preferred),
-    falling back to the counties table if necessary.
+    """Compute total population by joining county_centroids2 to counties_2020 on geoid
+    and aggregating SUM(pop) per county to avoid double-counting.
+
+    Streams per-county aggregates with a server-side cursor and shows progress with tqdm.
+    If the join or tables are missing, raises an error (no fallback).
+    
+    Note: county_centroids2 uses 'county_geoid' as the primary key (not 'geoid').
     """
-    # Try county_centroids2.pop first using a server-side cursor to stream
-    try:
-        cur.execute(f"SELECT to_regclass(%s);", (f"{SCHEMA}.{COUNTY_CENTROIDS}",))
-        if cur.fetchone()[0] is not None:
-            # Get total rows for progress
-            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{COUNTY_CENTROIDS};")
-            total_rows = cur.fetchone()[0] or 0
-            total = 0
-            # Use a server-side cursor to avoid loading all rows at once
-            stream_cur = cur.connection.cursor(name="pop_stream")
-            stream_cur.itersize = 1000
-            stream_cur.execute(f"SELECT pop FROM {SCHEMA}.{COUNTY_CENTROIDS};")
-            with tqdm(total=total_rows, desc="Summing population (centroids)", unit="rows") as pbar:
-                for row in stream_cur:
-                    v = row[0] if row and row[0] is not None else 0
-                    total += int(v)
-                    pbar.update(1)
-            stream_cur.close()
-            return total
-    except Exception:
-        # Fall back to counties table if centroid table/column doesn't exist or streaming fails
-        pass
-
-    # Fallback: try a pop column on counties table (streaming)
-    try:
-        cur.execute(f"SELECT to_regclass(%s);", (f"{SCHEMA}.{COUNTIES_TABLE}",))
-        if cur.fetchone()[0] is not None:
-            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{COUNTIES_TABLE};")
-            total_rows = cur.fetchone()[0] or 0
-            total = 0
-            stream_cur = cur.connection.cursor(name="pop_stream_cnty")
-            stream_cur.itersize = 1000
-            stream_cur.execute(f"SELECT pop FROM {SCHEMA}.{COUNTIES_TABLE};")
-            with tqdm(total=total_rows, desc="Summing population (counties)", unit="rows") as pbar:
-                for row in stream_cur:
-                    v = row[0] if row and row[0] is not None else 0
-                    total += int(v)
-                    pbar.update(1)
-            stream_cur.close()
-            return total
-    except Exception:
-        pass
-
-    # If both fail, raise a clear error
-    raise RuntimeError("Could not determine total population: no 'pop' column found on county centroid or counties tables")
+    # Count how many distinct counties will be produced by the join, for progress
+    cur.execute(
+        f"SELECT COUNT(DISTINCT cty.geoid) FROM {SCHEMA}.{COUNTY_CENTROIDS} cc JOIN {SCHEMA}.{COUNTIES_TABLE} cty ON cc.county_geoid = cty.geoid;"
+    )
+    total_rows = cur.fetchone()[0] or 0
+    
+    total = 0
+    # stream the per-county aggregated sums to avoid loading everything into memory
+    stream_cur = cur.connection.cursor()
+    stream_cur.itersize = 1000
+    stream_cur.execute(
+        f"SELECT cty.geoid, SUM(cc.pop)::numeric AS county_pop FROM {SCHEMA}.{COUNTY_CENTROIDS} cc JOIN {SCHEMA}.{COUNTIES_TABLE} cty ON cc.county_geoid = cty.geoid GROUP BY cty.geoid ORDER BY cty.geoid;"
+    )
+    with tqdm(total=total_rows, desc="Summing population (per-county from centroids)", unit="count") as pbar:
+        for row in stream_cur:
+            county_pop = row[1] if row and row[1] is not None else 0
+            total += int(county_pop)
+            pbar.update(1)
+    stream_cur.close()
+    return total
 
 
 def compute_merged_geom(cur, batch_size=500):
