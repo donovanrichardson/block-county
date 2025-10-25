@@ -9,6 +9,7 @@ import networkx as nx
 from scipy.spatial import Delaunay
 from pyproj import Transformer
 from tqdm import tqdm
+from datetime import datetime
 
 # Database configuration (imported from parent module)
 DB_CRED = None
@@ -113,13 +114,23 @@ def _cluster_tracts(tracts, n_clusters, parent_label):
 
     sp_length = dict(nx.all_pairs_dijkstra_path_length(G, weight="weight"))
     dist_matrix = np.zeros((n, n))
+    infinity_report = []  # Collect information about infinite distances
+
     for i in tqdm(range(n), desc="Building distance matrix (rows)", unit="row"):
         for j in range(n):
             dist_matrix[i, j] = sp_length[i][j] if j in sp_length[i] else np.inf
             if dist_matrix[i, j] == np.inf:
-                print(f"dist matrix at{geoids[i]} and {geoids[j]} is inf")
+                infinity_report.append(f"dist matrix at {geoids[i]} and {geoids[j]} is inf\n")
                 dist_matrix[i, j] = np.finfo(np.float64).max  # Replace inf with a large finite number
-    
+
+    # Generate a timestamped filename for the infinity report
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    infinity_report_filename = f"infinity_report_{timestamp}.txt"
+
+    # Write the infinity report to a file
+    with open(infinity_report_filename, "w") as report_file:
+        report_file.writelines(infinity_report)
+
     # Diagnostic: print largest value in dist_matrix
     print("Max value in dist_matrix:", np.nanmax(dist_matrix))
     # Sample 1000 random entries and print the largest 5
