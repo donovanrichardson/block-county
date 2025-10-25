@@ -9,7 +9,7 @@ into the hll table.
 Usage:
     python normalize/hierarchy_builder.py
 """
-
+import math
 import sys
 import psycopg2
 from InquirerPy.base import Choice
@@ -269,7 +269,7 @@ def main():
             print("\nStep 3: Set number of clusters")
             k_input = inquirer.number(
                 message=f"Enter number of clusters:",
-                default=DEFAULT_K,
+                default=math.ceil(float(parent_record['pop'])**(1/6)),
                 min_allowed=1,
                 max_allowed=1000
             ).execute()
@@ -336,14 +336,14 @@ def main():
                         cur.execute(f"""
                             SELECT ST_AsBinary(ST_SetSRID(ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_Union(geom)), 3)), 4269)) AS merged_geom
                             FROM {SCHEMA}.{geom_table}
-                            WHERE LEFT(geoid, 12) = ANY(%s);
+                            WHERE LEFT(geoid20, 12) = ANY(%s);
                         """, (geoids,))
                     else:
                         # For county or tract level
                         cur.execute(f"""
                             SELECT ST_AsBinary(ST_SetSRID(ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_Union(geom)), 3)), 4269)) AS merged_geom
                             FROM {SCHEMA}.{geom_table}
-                            WHERE geoid = ANY(%s);
+                            WHERE geoid20 = ANY(%s);
                         """, (geoids,))
                     
                     merged_geom_row = cur.fetchone()
