@@ -18,6 +18,7 @@ scikit-learn-extra = "*"
 numpy = "<2"
 networkx = "*"
 pymetis = "*"
+inquirerpy = "*"
 
 [dev-packages]
 

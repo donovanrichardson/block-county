@@ -25,7 +25,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * np.arcsin(np.sqrt(a))
 
 
-def cluster_and_insert(tract_centroids, n_clusters, region_label, db_cred, schema, district_table):
+def cluster_and_insert(tract_centroids, n_clusters, region_label):
     """
     Cluster tracts into sub-districts and insert assignments into the database.
     
@@ -42,8 +42,10 @@ def cluster_and_insert(tract_centroids, n_clusters, region_label, db_cred, schem
     # Cluster the tracts
     assignments = _cluster_tracts(tract_centroids, n_clusters, region_label)
     
+    return assignments
+    
     # Insert into database
-    _insert_subdistricts(assignments, db_cred, schema, district_table)
+    # _insert_subdistricts(assignments, db_cred, schema, district_table)
 
 
 def _cluster_tracts(tracts, n_clusters, parent_label):
@@ -149,8 +151,9 @@ def _cluster_tracts(tracts, n_clusters, parent_label):
         results.append({
             'geoid': geoid,
             'type': '11',
-            'parent': f"r{parent_label}r{labels[i]}",
-            'medioid': geoid in medoid_geoids
+            'label': f"r{parent_label}r{labels[i]}",
+            'medioid': geoid in medoid_geoids,
+            'pop': pops[i]
         })
     return results
 
