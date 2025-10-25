@@ -71,7 +71,7 @@ def psql_conn():
 def get_hierarchies(cur):
     """Fetch distinct hierarchies from hll table."""
     cur.execute(f"SELECT DISTINCT hierarchy FROM {SCHEMA}.{HLL_TABLE} ORDER BY hierarchy;")
-    return [row[0] for row in cur.fetchall()]
+    return [row['hierarchy'] for row in cur.fetchall()]
 
 
 def get_level_zero_records(cur, hierarchy):
@@ -109,20 +109,18 @@ def drill_down_to_leaf(cur, hierarchy):
         print(f"No level-0 records found for hierarchy '{hierarchy}'")
         return None
     
-    # Display level 0 options
-    choices = [f"ID: {r[0]}, Label: {r[2]}, Pop: {r[3]}" for r in level_zero]
-    questions = [
-        inquirer.List('record',
-                      message=f"Select level-0 record for hierarchy '{hierarchy}'",
-                      choices=choices)
-    ]
-    answer = inquirer.prompt(questions)
-    if not answer:
+    # Display level 0 options - create tuples of (display, value)
+    choices = [(f"ID: {r['id']}, Label: {r['label']}, Pop: {r['pop']}", r['id']) for r in level_zero]
+    
+    selected_id = inquirer.select(
+        message=f"Select level-0 record for hierarchy '{hierarchy}':",
+        choices=choices
+    ).execute()
+    
+    if selected_id is None:
         return None
     
-    # Extract the selected ID
-    selected_idx = choices.index(answer['record'])
-    current_id = level_zero[selected_idx][0]
+    current_id = selected_id
     
     # Keep drilling down until we reach a leaf
     while True:
@@ -131,31 +129,29 @@ def drill_down_to_leaf(cur, hierarchy):
             # This is a leaf node
             return current_id
         
-        # Present children for selection
-        choices = [f"ID: {r[0]}, Level: {r[1]}, Label: {r[2]}, Pop: {r[3]}" for r in children]
-        choices.append("** Go back **")
-        choices.append("** Select this record (stop drilling) **")
+        # Present children for selection - create tuples of (display, value)
+        choices = [(f"ID: {r['id']}, Level: {r['level']}, Label: {r['label']}, Pop: {r['pop']}", r['id']) for r in children]
+        choices.append(("** Select this record (stop drilling) **", "__stop__"))
+        choices.append(("** Go back **", "__back__"))
         
-        questions = [
-            inquirer.List('child',
-                          message=f"Children of {current_id} (or select this record as parent):",
-                          choices=choices)
-        ]
-        answer = inquirer.prompt(questions)
-        if not answer:
+        selection = inquirer.select(
+            message=f"Children of {current_id} (or select this record as parent):",
+            choices=choices
+        ).execute()
+        
+        if selection is None:
             return None
         
-        if answer['child'] == "** Select this record (stop drilling) **":
+        if selection == "__stop__":
             return current_id
-        elif answer['child'] == "** Go back **":
+        elif selection == "__back__":
             # For simplicity, we'll just return None and let user restart
             # (A full implementation could maintain a stack of visited nodes)
             print("Going back not implemented yet. Please restart selection.")
             return None
         else:
-            # Extract the selected child ID
-            selected_idx = choices.index(answer['child'])
-            current_id = children[selected_idx][0]
+            # Selection is the child ID
+            current_id = selection
 
 
 def select_parent_record(cur):
@@ -167,35 +163,31 @@ def select_parent_record(cur):
         return None
     
     # Ask user to select hierarchy
-    questions = [
-        inquirer.List('hierarchy',
-                      message="Select a hierarchy:",
-                      choices=hierarchies)
-    ]
-    answer = inquirer.prompt(questions)
-    if not answer:
-        return None
+    hierarchy = inquirer.select(
+        message="Select a hierarchy:",
+        choices=hierarchies
+    ).execute()
     
-    hierarchy = answer['hierarchy']
+    if hierarchy is None:
+        return None
     
     # Ask user: manual entry or drill down?
-    questions = [
-        inquirer.List('mode',
-                      message="How do you want to select the parent record?",
-                      choices=['Drill down interactively', 'Enter record ID manually'])
-    ]
-    answer = inquirer.prompt(questions)
-    if not answer:
+    mode = inquirer.select(
+        message="How do you want to select the parent record?",
+        choices=['Drill down interactively', 'Enter record ID manually']
+    ).execute()
+    
+    if mode is None:
         return None
     
-    if answer['mode'] == 'Enter record ID manually':
-        questions = [
-            inquirer.Text('record_id', message="Enter the record ID:")
-        ]
-        answer = inquirer.prompt(questions)
-        if not answer:
+    if mode == 'Enter record ID manually':
+        record_id = inquirer.text(
+            message="Enter the record ID:"
+        ).execute()
+        
+        if not record_id:
             return None
-        record_id = answer['record_id']
+            
         # Validate that the record exists
         record = get_record(cur, record_id)
         if not record:
@@ -261,37 +253,31 @@ def main():
             
             # Step 2: Select centroid level
             print("\nStep 2: Select centroid level")
-            questions = [
-                inquirer.List('centroid_level',
-                              message="Choose centroid level:",
-                              choices=['county', '11', '12'])
-            ]
-            answer = inquirer.prompt(questions)
-            if not answer:
+            centroid_level = inquirer.select(
+                message="Choose centroid level:",
+                choices=['county', '11', '12']
+            ).execute()
+            
+            if centroid_level is None:
                 print("No centroid level selected. Exiting.")
                 return
             
-            centroid_level = answer['centroid_level']
             print(f"Selected centroid level: {centroid_level}")
             
             # Step 3: Ask for number of clusters (K)
             print("\nStep 3: Set number of clusters")
-            questions = [
-                inquirer.Text('k',
-                              message=f"Enter number of clusters (default {DEFAULT_K}):",
-                              default=str(DEFAULT_K))
-            ]
-            answer = inquirer.prompt(questions)
-            if not answer:
+            k_input = inquirer.number(
+                message=f"Enter number of clusters:",
+                default=DEFAULT_K,
+                min_allowed=1,
+                max_allowed=1000
+            ).execute()
+            
+            if k_input is None:
                 print("No K value provided. Exiting.")
                 return
             
-            try:
-                k = int(answer['k'])
-            except ValueError:
-                print(f"Invalid number. Using default: {DEFAULT_K}")
-                k = DEFAULT_K
-            
+            k = int(k_input)
             print(f"Number of clusters: {k}")
             
             # Step 4: Fetch parent geometry and centroids
