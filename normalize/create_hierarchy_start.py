@@ -52,6 +52,23 @@ COUNTIES_TABLE = "counties_2020"
 COUNTY_CENTROIDS = "county_centroids2"
 HLL_TABLE = "hll"
 
+# State FIPS codes to include (edit as needed)
+STATE_FIPS = [
+    "56", "50", "11", "38",
+    "46", "10", "30", "44",
+    "23", "33", "16", "54",
+    "31", "35", "28", "05",
+    "19", "20", "32", "49",
+    "09", "41", "40", "21",
+    "22", "01", "45", "08",
+    "27", "55", "24", "29",
+    "18", "47", "25", "04",
+    "53", "51", "34", "26",
+    "37", "13", "39", "17",
+    "42", "36", "12", "48",
+    "06"
+]
+
 
 def psql_conn():
     return psycopg2.connect(**DB_CRED)
@@ -71,10 +88,12 @@ def compute_total_population(cur):
     If the join or tables are missing, raises an error (no fallback).
     
     Note: county_centroids2 uses 'county_geoid' as the primary key (not 'geoid').
+    Filters to only counties with statefp in STATE_FIPS.
     """
     # Count how many distinct counties will be produced by the join, for progress
     cur.execute(
-        f"SELECT COUNT(DISTINCT cty.geoid) FROM {SCHEMA}.{COUNTY_CENTROIDS} cc JOIN {SCHEMA}.{COUNTIES_TABLE} cty ON cc.county_geoid = cty.geoid;"
+        f"SELECT COUNT(DISTINCT cty.geoid) FROM {SCHEMA}.{COUNTY_CENTROIDS} cc JOIN {SCHEMA}.{COUNTIES_TABLE} cty ON cc.county_geoid = cty.geoid WHERE cty.statefp = ANY(%s);",
+        (STATE_FIPS,)
     )
     total_rows = cur.fetchone()[0] or 0
     
@@ -83,7 +102,8 @@ def compute_total_population(cur):
     stream_cur = cur.connection.cursor()
     stream_cur.itersize = 1000
     stream_cur.execute(
-        f"SELECT cty.geoid, SUM(cc.pop)::numeric AS county_pop FROM {SCHEMA}.{COUNTY_CENTROIDS} cc JOIN {SCHEMA}.{COUNTIES_TABLE} cty ON cc.county_geoid = cty.geoid GROUP BY cty.geoid ORDER BY cty.geoid;"
+        f"SELECT cty.geoid, SUM(cc.pop)::numeric AS county_pop FROM {SCHEMA}.{COUNTY_CENTROIDS} cc JOIN {SCHEMA}.{COUNTIES_TABLE} cty ON cc.county_geoid = cty.geoid WHERE cty.statefp = ANY(%s) GROUP BY cty.geoid ORDER BY cty.geoid;",
+        (STATE_FIPS,)
     )
     with tqdm(total=total_rows, desc="Summing population (per-county from centroids)", unit="count") as pbar:
         for row in stream_cur:
@@ -98,19 +118,19 @@ def compute_merged_geom(cur, batch_size=500):
     """Compute merged geometry by performing ST_Union in batches and showing progress.
 
     Strategy:
-    - Fetch all county geoids (should be ~3k rows, so safe in memory).
+    - Fetch all county geoids from counties_2020 where statefp is in STATE_FIPS.
     - Create a temporary table to hold per-batch union geometries.
     - For each batch of geoids, compute a server-side ST_Union(geom) and INSERT the result into the temp table.
     - After processing all batches, ST_Union the temp table geometries into the final geometry.
     """
-    # Count total counties
-    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{COUNTIES_TABLE};")
+    # Count total counties matching state filter
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{COUNTIES_TABLE} WHERE statefp = ANY(%s);", (STATE_FIPS,))
     total = cur.fetchone()[0] or 0
     if total == 0:
-        raise RuntimeError(f"Source counties table {SCHEMA}.{COUNTIES_TABLE} is empty or missing geometries")
+        raise RuntimeError(f"No counties found in {SCHEMA}.{COUNTIES_TABLE} matching statefp in STATE_FIPS")
 
-    # Fetch all geoids
-    cur.execute(f"SELECT geoid FROM {SCHEMA}.{COUNTIES_TABLE} ORDER BY geoid;")
+    # Fetch all geoids for selected states
+    cur.execute(f"SELECT geoid FROM {SCHEMA}.{COUNTIES_TABLE} WHERE statefp = ANY(%s) ORDER BY geoid;", (STATE_FIPS,))
     geoids = [r[0] for r in cur.fetchall()]
 
     # Create a temp table to store batch unions
