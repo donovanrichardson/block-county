@@ -343,7 +343,7 @@ def main():
                         cur.execute(f"""
                             SELECT ST_AsBinary(ST_SetSRID(ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_Union(geom)), 3)), 4269)) AS merged_geom
                             FROM {SCHEMA}.{geom_table}
-                            WHERE geoid20 = ANY(%s);
+                            WHERE geoid = ANY(%s);
                         """, (geoids,))
                     
                     merged_geom_row = cur.fetchone()
