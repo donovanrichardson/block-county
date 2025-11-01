@@ -80,8 +80,7 @@ def _cluster_tracts(tracts, n_clusters, parent_label):
         # Ensure pop values are Python floats to avoid type warnings with max()
         pop_a = max(float(pops[a]), 1e-9)
         pop_b = max(float(pops[b]), 1e-9)
-        weight = ((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2
-        # alt_weight = (((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2)/(pop_a+pop_b) #todo do not remove alt_weight comment
+        weight = (((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2)/(pop_a+pop_b) #todo do not remove alt_weight comment
         G.add_edge(a, b, weight=weight)
 
     # For nodes with zero population, keep only their single shortest physical edge (by haversine distance),
