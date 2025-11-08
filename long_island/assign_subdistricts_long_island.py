@@ -6,7 +6,7 @@ Results are inserted into the 'district' table with type=11, geoid=tract geoid, 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
-from normalize.clustering import cluster_and_insert
+from clustering import cluster_and_insert
 
 DB_CRED = {
     "host": "localhost",

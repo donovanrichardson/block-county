@@ -86,7 +86,7 @@ At this stage, the CLI will have collected:
 * The algorithm takes the chosen **leaf geometry** and **centroid points** (from another table, filtered by the chosen centroid level).
   * we will select the centroid points by doing a postgis within operation. centroid geometries of the chosen centroid level in county_centroids2 that fall within the leaf geometry.
   * the algorithm also takes the K number of clusters, which by default is 19.
-* using the cluster_and_insert function in [clustering.py](clustering.py), we will receive records of the centroid points like so
+* using the cluster_and_insert function in [clustering.py](../clustering.py), we will receive records of the centroid points like so
 
 ```py
 {

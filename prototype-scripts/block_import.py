@@ -12,11 +12,6 @@ Join key:
 Indexes created with rationale in SQL comments.
 """
 
-import os
-import io
-import csv
-import sys
-import json
 import time
 import shutil
 import zipfile
