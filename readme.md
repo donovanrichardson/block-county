@@ -183,11 +183,11 @@ CREATE INDEX hll_label_idx ON hll(label numeric_ops);
 
 ```
 
-
-```sql
-
 After importing the requisite data, to run the interactive shell, you must run the following command:
 
 ```sh
 python hierarchy_builder.py
 ```
+
+**Congrats!**  
+You can now use the K-Medoids algorithm to cluster your desired regions of the US to your heart's desire!
