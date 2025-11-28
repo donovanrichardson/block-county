@@ -1,0 +1,572 @@
+<!doctype html>
+<html class="no-js" lang="en">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="rawlist" href="rawlist.html" /><link rel="prev" title="confirm" href="confirm.html" />
+
+    <meta name="generator" content="sphinx-4.5.0, furo 2021.11.23"/>
+        <title>select - InquirerPy</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?digest=7f0192ddeb2adecfbaa87ffbcf67d16358b30bc1" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?digest=0af69da206d614734f649b27d4cdc2dd6c31f41d" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  body[data-theme="dark"] {
+    --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+  }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+  }
+</style><script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="inquirerpy" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/pages/prompts/list.html" /><meta name="readthedocs-http-status" content="200" /></head>
+  <body>
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path stroke="none" d="M0 0h24v24H0z" />
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="10" y1="12" x2="20" y2="12" />
+      <line x1="6" y1="18" x2="20" y2="18" />
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">InquirerPy</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  
+  <span class="sidebar-brand-text">InquirerPy</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder=Search name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">prompts</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="input.html">text</a></li>
+<li class="toctree-l1"><a class="reference internal" href="secret.html">secret</a></li>
+<li class="toctree-l1"><a class="reference internal" href="filepath.html">filepath</a></li>
+<li class="toctree-l1"><a class="reference internal" href="number.html">number</a></li>
+<li class="toctree-l1"><a class="reference internal" href="confirm.html">confirm</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">select</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rawlist.html">rawlist</a></li>
+<li class="toctree-l1"><a class="reference internal" href="expand.html">expand</a></li>
+<li class="toctree-l1"><a class="reference internal" href="checkbox.html">checkbox</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fuzzy.html">fuzzy</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Customisation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../style.html">Style</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../kb.html">Keybindings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../height.html">Height</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../env.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dynamic.html">Dynamic Values</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../raise_kbi.html">Skip &amp; KeyboardInterrupt</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../inquirer.html">inquirer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../prompt.html">prompt</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../validator.html">Validator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../separator.html">Separator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../patched_print.html">patched_print</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../color_print.html">color_print</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">CHANGELOG</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/kazhala/InquirerPy">GitHub Repository</a></li>
+</ul>
+
+</div>
+</div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main">
+          <section class="tex2jax_ignore mathjax_ignore" id="select">
+<h1>select<a class="headerlink" href="#select" title="Permalink to this headline">¶</a></h1>
+<p>A prompt that displays a list of choices to select.</p>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h2>
+<p><img alt="demo" src="https://assets.kazhala.me/InquirerPy/list.gif"/></p>
+<details>
+<summary>Classic Syntax (PyInquirer)</summary>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">InquirerPy</span> <span class="kn">import</span> <span class="n">prompt</span>
+<span class="kn">from</span> <span class="nn">InquirerPy.base.control</span> <span class="kn">import</span> <span class="n">Choice</span>
+<span class="kn">from</span> <span class="nn">InquirerPy.separator</span> <span class="kn">import</span> <span class="n">Separator</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="n">questions</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"list"</span><span class="p">,</span>
+            <span class="s2">"message"</span><span class="p">:</span> <span class="s2">"Select an action:"</span><span class="p">,</span>
+            <span class="s2">"choices"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"Upload"</span><span class="p">,</span> <span class="s2">"Download"</span><span class="p">,</span> <span class="n">Choice</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Exit"</span><span class="p">)],</span>
+            <span class="s2">"default"</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"list"</span><span class="p">,</span>
+            <span class="s2">"message"</span><span class="p">:</span> <span class="s2">"Select regions:"</span><span class="p">,</span>
+            <span class="s2">"choices"</span><span class="p">:</span> <span class="p">[</span>
+                <span class="n">Choice</span><span class="p">(</span><span class="s2">"ap-southeast-2"</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Sydney"</span><span class="p">),</span>
+                <span class="n">Choice</span><span class="p">(</span><span class="s2">"ap-southeast-1"</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Singapore"</span><span class="p">),</span>
+                <span class="n">Separator</span><span class="p">(),</span>
+                <span class="s2">"us-east-1"</span><span class="p">,</span>
+                <span class="s2">"us-east-2"</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="s2">"multiselect"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">"transformer"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">result</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="si">}</span><span class="s2"> region</span><span class="si">{</span><span class="s1">'s'</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s1">''</span><span class="si">}</span><span class="s2"> selected"</span><span class="p">,</span>
+            <span class="s2">"when"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">result</span><span class="p">:</span> <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">]</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">prompt</span><span class="p">(</span><span class="n">questions</span><span class="o">=</span><span class="n">questions</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+</div>
+</details>
+<details open="">
+<summary>Alternate Syntax</summary>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">InquirerPy</span> <span class="kn">import</span> <span class="n">inquirer</span>
+<span class="kn">from</span> <span class="nn">InquirerPy.base.control</span> <span class="kn">import</span> <span class="n">Choice</span>
+<span class="kn">from</span> <span class="nn">InquirerPy.separator</span> <span class="kn">import</span> <span class="n">Separator</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="n">action</span> <span class="o">=</span> <span class="n">inquirer</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+        <span class="n">message</span><span class="o">=</span><span class="s2">"Select an action:"</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span>
+            <span class="s2">"Upload"</span><span class="p">,</span>
+            <span class="s2">"Download"</span><span class="p">,</span>
+            <span class="n">Choice</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Exit"</span><span class="p">),</span>
+        <span class="p">],</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">action</span><span class="p">:</span>
+        <span class="n">region</span> <span class="o">=</span> <span class="n">inquirer</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+            <span class="n">message</span><span class="o">=</span><span class="s2">"Select regions:"</span><span class="p">,</span>
+            <span class="n">choices</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">Choice</span><span class="p">(</span><span class="s2">"ap-southeast-2"</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Sydney"</span><span class="p">),</span>
+                <span class="n">Choice</span><span class="p">(</span><span class="s2">"ap-southeast-1"</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Singapore"</span><span class="p">),</span>
+                <span class="n">Separator</span><span class="p">(),</span>
+                <span class="s2">"us-east-1"</span><span class="p">,</span>
+                <span class="s2">"us-east-2"</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="n">multiselect</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">transformer</span><span class="o">=</span><span class="k">lambda</span> <span class="n">result</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="si">}</span><span class="s2"> region</span><span class="si">{</span><span class="s1">'s'</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s1">''</span><span class="si">}</span><span class="s2"> selected"</span><span class="p">,</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+</div>
+</details>
+</section>
+<section id="choices">
+<h2>Choices<a class="headerlink" href="#choices" title="Permalink to this headline">¶</a></h2>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="../dynamic.html#choices"><span class="std std-ref">choices</span></a></p>
+</div>
+</section>
+<section id="keybindings">
+<h2>Keybindings<a class="headerlink" href="#keybindings" title="Permalink to this headline">¶</a></h2>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="../kb.html#id1"><span class="std std-ref">keybindings</span></a></p>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">"answer"</span><span class="p">:</span> <span class="p">[{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"enter"</span><span class="p">}],</span>   <span class="c1"># answer the prompt</span>
+    <span class="s2">"interrupt"</span><span class="p">:</span> <span class="p">[{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"c-c"</span><span class="p">}],</span>  <span class="c1"># raise KeyboardInterrupt</span>
+    <span class="s2">"skip"</span><span class="p">:</span> <span class="p">[{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"c-z"</span><span class="p">}],</span>   <span class="c1"># skip the prompt</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<!-- start list kb -->
+<p>The following dictionary contains the additional keybindings created by this prompt.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">"down"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"down"</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"c-n"</span><span class="p">},</span>   <span class="c1"># move down</span>
+    <span class="p">],</span>
+    <span class="s2">"up"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"up"</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"c-p"</span><span class="p">},</span>   <span class="c1"># move up</span>
+    <span class="p">],</span>
+    <span class="s2">"toggle"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"space"</span><span class="p">},</span>   <span class="c1"># toggle choices</span>
+    <span class="p">],</span>
+    <span class="s2">"toggle-down"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"c-i"</span><span class="p">},</span>   <span class="c1"># toggle choice and move down (tab)</span>
+    <span class="p">],</span>
+    <span class="s2">"toggle-up"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"s-tab"</span><span class="p">},</span>   <span class="c1"># toggle choice and move up (shift+tab)</span>
+    <span class="p">],</span>
+    <span class="s2">"toggle-all"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"alt-r"</span><span class="p">},</span>   <span class="c1"># toggle all choices</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"c-r"</span><span class="p">},</span>
+    <span class="p">],</span>
+    <span class="s2">"toggle-all-true"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"alt-a"</span><span class="p">},</span>   <span class="c1"># toggle all choices true</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"c-a"</span><span class="p">}</span><span class="o">.</span>
+    <span class="p">],</span>
+    <span class="s2">"toggle-all-false"</span><span class="p">:</span> <span class="p">[],</span>   <span class="c1"># toggle all choices false</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<!-- end list kb -->
+<!-- start list vi kb -->
+<p>When <code class="docutils literal notranslate"><span class="pre">vi_mode</span></code> is True, the “up” and “down” navigation key will be changed.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">"down"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"down"</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"j"</span><span class="p">},</span>
+    <span class="p">],</span>
+    <span class="s2">"up"</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"up"</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">"key"</span><span class="p">:</span> <span class="s2">"k"</span><span class="p">},</span>
+    <span class="p">],</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<!-- end list vi kb -->
+</section>
+<section id="multiple-selection">
+<h2>Multiple Selection<a class="headerlink" href="#multiple-selection" title="Permalink to this headline">¶</a></h2>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#keybindings"><span class="std std-ref">Keybindings</span></a></p>
+</div>
+<p>You can enable multiple selection on the prompt by configuring the parameter <code class="docutils literal notranslate"><span class="pre">multiselect</span></code> to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+<p>You can also have certain choices pre-selected during the mode. The choices to be pre-selected requires to be either an instance
+of <a class="reference internal" href="../api.html#InquirerPy.base.control.Choice" title="InquirerPy.base.control.Choice"><code class="xref py py-class docutils literal notranslate"><span class="pre">Choice</span></code></a> or <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a>.</p>
+<p>The following example will have <code class="docutils literal notranslate"><span class="pre">1</span></code> and <code class="docutils literal notranslate"><span class="pre">2</span></code> pre-selected.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">InquirerPy</span> <span class="kn">import</span> <span class="n">inquirer</span>
+<span class="kn">from</span> <span class="nn">InquirerPy.base.control</span> <span class="kn">import</span> <span class="n">Choice</span>
+
+<span class="n">choices</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">Choice</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">Choice</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="mi">3</span><span class="p">,</span>
+    <span class="mi">4</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">inquirer</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+    <span class="n">message</span><span class="o">=</span><span class="s2">"Selct one:"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="n">choices</span><span class="p">,</span> <span class="n">multiselect</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="default-value">
+<h2>Default Value<a class="headerlink" href="#default-value" title="Permalink to this headline">¶</a></h2>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="../dynamic.html#default"><span class="std std-ref">default</span></a></p>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">default</span></code> parameter will be used to determine which choice is highlighted by default.</p>
+<p>It should be the value of one of the choices.</p>
+<p>If you wish to pre-select certain choices in multiselect mode, you can leverage the <code class="docutils literal notranslate"><span class="pre">enabled</span></code> parameter/key of each choice.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">InquirerPy.base</span> <span class="kn">import</span> <span class="n">Choice</span>
+
+<span class="n">choices</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">Choice</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>  <span class="c1"># enabled by default</span>
+    <span class="n">Choice</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># not enabled</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="reference">
+<h2>Reference<a class="headerlink" href="#reference" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">InquirerPy.prompts.list.</span></span><span class="sig-name descname"><span class="pre">ListPrompt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">choices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">style</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vi_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qmark</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'?'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amark</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'?'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pointer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'❯'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instruction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">long_instruction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_height</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multiselect</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'❯'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker_pl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'</span> <span class="pre">'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">border</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invalid_message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Invalid</span> <span class="pre">input'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keybindings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_cursor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cycle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wrap_lines</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">raise_keyboard_interrupt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mandatory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mandatory_message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Mandatory</span> <span class="pre">prompt'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_result</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/InquirerPy/prompts/list.html#ListPrompt"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Create a prompt that displays a list of choices to select.</p>
+<p>A wrapper class around <a class="reference external" href="https://python-prompt-toolkit.readthedocs.io/en/master/pages/reference.html#prompt_toolkit.application.Application" title="(in prompt_toolkit v3.0.32)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Application</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.11)"><em>Callable</em></a><em>[</em><em>[</em><em>InquirerPySessionResult</em><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>]</em><em>]</em>) – The question to ask the user.
+Refer to <a class="reference internal" href="../dynamic.html#message"><span class="std std-ref">message</span></a> documentation for more details.</p></li>
+<li><p><strong>choices</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.11)"><em>Callable</em></a><em>[</em><em>[</em><em>InquirerPySessionResult</em><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference internal" href="../api.html#InquirerPy.base.control.Choice" title="InquirerPy.base.control.Choice"><em>Choice</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>]</em><em>]</em><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference internal" href="../api.html#InquirerPy.base.control.Choice" title="InquirerPy.base.control.Choice"><em>Choice</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>]</em><em>]</em>) – List of choices to display and select.
+Refer to <a class="reference internal" href="../dynamic.html#choices"><span class="std std-ref">choices</span></a> documentation for more details.</p></li>
+<li><p><strong>style</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference internal" href="../api.html#InquirerPy.utils.InquirerPyStyle" title="InquirerPy.utils.InquirerPyStyle"><em>InquirerPy.utils.InquirerPyStyle</em></a><em>]</em>) – An <code class="xref py py-class docutils literal notranslate"><span class="pre">InquirerPyStyle</span></code> instance.
+Refer to <a class="reference internal" href="../style.html#alternate-syntax"><span class="std std-ref">Style</span></a> documentation for more details.</p></li>
+<li><p><strong>vi_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Use vim keybinding for the prompt.
+Refer to <a class="reference internal" href="../kb.html#id1"><span class="std std-ref">keybindings</span></a> documentation for more details.</p></li>
+<li><p><strong>default</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.11)"><em>Callable</em></a><em>[</em><em>[</em><em>InquirerPySessionResult</em><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>]</em>) – Set the default value of the prompt.
+This will be used to determine which choice is highlighted (current selection),
+The default value should be the value of one of the choices.
+Refer to <a class="reference internal" href="../dynamic.html#default"><span class="std std-ref">default</span></a> documentation for more details.</p></li>
+<li><p><strong>qmark</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Question mark symbol. Custom symbol that will be displayed infront of the question before its answered.</p></li>
+<li><p><strong>amark</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Answer mark symbol. Custom symbol that will be displayed infront of the question after its answered.</p></li>
+<li><p><strong>pointer</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Pointer symbol. Customer symbol that will be used to indicate the current choice selection.</p></li>
+<li><p><strong>instruction</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Short instruction to display next to the question.</p></li>
+<li><p><strong>long_instruction</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Long instructions to display at the bottom of the prompt.</p></li>
+<li><p><strong>validate</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.11)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a><em>]</em><em>, </em><em>Validator</em><em>]</em><em>]</em>) – Add validation to user input.
+The main use case for this prompt would be when <cite>multiselect</cite> is True, you can enforce a min/max selection.
+Refer to <a class="reference internal" href="../validator.html#validator"><span class="std std-ref">Validator</span></a> documentation for more details.</p></li>
+<li><p><strong>invalid_message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Error message to display when user input is invalid.
+Refer to <a class="reference internal" href="../validator.html#validator"><span class="std std-ref">Validator</span></a> documentation for more details.</p></li>
+<li><p><strong>transformer</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.11)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>]</em>) – A function which performs additional transformation on the value that gets printed to the terminal.
+Different than <cite>filter</cite> parameter, this is only visual effect and won’t affect the actual value returned by <a class="reference internal" href="../api.html#InquirerPy.base.simple.BaseSimplePrompt.execute" title="InquirerPy.base.simple.BaseSimplePrompt.execute"><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute()</span></code></a>.
+Refer to <a class="reference internal" href="../dynamic.html#transformer"><span class="std std-ref">transformer</span></a> documentation for more details.</p></li>
+<li><p><strong>filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.11)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>]</em>) – A function which performs additional transformation on the result.
+This affects the actual value returned by <a class="reference internal" href="../api.html#InquirerPy.base.simple.BaseSimplePrompt.execute" title="InquirerPy.base.simple.BaseSimplePrompt.execute"><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute()</span></code></a>.
+Refer to <a class="reference internal" href="../dynamic.html#filter"><span class="std std-ref">filter</span></a> documentation for more details.</p></li>
+<li><p><strong>height</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>]</em><em>]</em>) – Preferred height of the prompt.
+Refer to <a class="reference internal" href="../height.html#id1"><span class="std std-ref">height</span></a> documentation for more details.</p></li>
+<li><p><strong>max_height</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>]</em><em>]</em>) – Max height of the prompt.
+Refer to <a class="reference internal" href="../height.html#id1"><span class="std std-ref">height</span></a> documentation for more details.</p></li>
+<li><p><strong>multiselect</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Enable multi-selection on choices.
+You can use <cite>validate</cite> parameter to control min/max selections.
+Setting to True will also change the result from a single value to a list of values.</p></li>
+<li><p><strong>marker</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Marker Symbol. Custom symbol to indicate if a choice is selected.
+This will take effects when <cite>multiselect</cite> is True.</p></li>
+<li><p><strong>marker_pl</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Marker place holder when the choice is not selected.
+This is empty space by default.</p></li>
+<li><p><strong>border</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Create border around the choice window.</p></li>
+<li><p><strong>keybindings</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><em>FilterOrBool</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>]</em><em>]</em><em>]</em><em>]</em><em>]</em><em>]</em>) – Customise the builtin keybindings.
+Refer to <a class="reference internal" href="../kb.html#id1"><span class="std std-ref">keybindings</span></a> for more details.</p></li>
+<li><p><strong>show_cursor</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Display cursor at the end of the prompt.
+Set to False to hide the cursor.</p></li>
+<li><p><strong>cycle</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Return to top item if hit bottom during navigation or vice versa.</p></li>
+<li><p><strong>wrap_lines</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Soft wrap question lines when question exceeds the terminal width.</p></li>
+<li><p><strong>raise_keyboard_interrupt</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Raise the <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyboardInterrupt" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">KeyboardInterrupt</span></code></a> exception when <cite>ctrl-c</cite> is pressed. If false, the result
+will be <cite>None</cite> and the question is skiped.</p></li>
+<li><p><strong>mandatory</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a>) – Indicate if the prompt is mandatory. If True, then the question cannot be skipped.</p></li>
+<li><p><strong>mandatory_message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Error message to show when user attempts to skip mandatory prompt.</p></li>
+<li><p><strong>session_result</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><em>int</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><em>Optional</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><em>Union</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><em>Any</em></a><em>]</em><em>]</em><em>]</em><em>]</em><em>]</em>) – Used internally for <a class="reference internal" href="../../index.html#classic-syntax-pyinquirer"><span class="std std-ref">Classic Syntax (PyInquirer)</span></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">InquirerPy</span> <span class="kn">import</span> <span class="n">inquirer</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">inquirer</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">"Select one:"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+</dd></dl>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="rawlist.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">rawlist</div>
+              </div>
+              <svg><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="confirm.html">
+              <svg><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">confirm</div>
+                
+              </div>
+            </a>
+        </div>
+
+        <div class="related-information">
+              Copyright &#169; 2021, Kevin Zhuang |
+          Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+          <a href="https://github.com/pradyunsg/furo">Furo theme</a>.
+            | <a class="muted-link" href="../../_sources/pages/prompts/list.md.txt"
+               rel="nofollow">
+              Show Source
+            </a>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            Contents
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">select</a><ul>
+<li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#choices">Choices</a></li>
+<li><a class="reference internal" href="#keybindings">Keybindings</a></li>
+<li><a class="reference internal" href="#multiple-selection">Multiple Selection</a></li>
+<li><a class="reference internal" href="#default-value">Default Value</a></li>
+<li><a class="reference internal" href="#reference">Reference</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/scripts/furo.js"></script>
+    <script src="../../_static/clipboard.min.js"></script>
+    <script src="../../_static/copybutton.js"></script>
+    </body>
+</html>

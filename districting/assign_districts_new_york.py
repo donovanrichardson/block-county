@@ -3,10 +3,6 @@
 Create hypothetical congressional districts for New York State using recursive binary K-Medoids clustering.
 Fetches tract centroids (type=11) from county_centroids2 for all tracts beginning with state FIPS 36 (New York).
 Recursively splits regions into 2 clusters, rebalancing populations, until each cluster represents ~1 district.
-
-Uses two distance matrices:
-1. Weighted distance matrix (population-weighted) for K-Medoids clustering
-2. Parallel haversine distance matrix (filtered Delaunay, excluding largest edges) for rebalancing
 """
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -17,6 +13,7 @@ from scipy.spatial import Delaunay
 from pyproj import Transformer
 from tqdm import tqdm
 import time
+import pymetis
 
 DB_CRED = {
     "host": "localhost",
@@ -27,9 +24,10 @@ DB_CRED = {
 }
 SCHEMA = "public"
 CENTROID_TABLE = "county_centroids2"
-DISTRICT_TABLE = "district_ny_parallel"
+DISTRICT_TABLE = "ny_metis"
 
 # Number of congressional districts to create for New York State
+# N_DISTRICTS = 9  # Can be changed to any integer >= 2
 N_DISTRICTS = 26  # Can be changed to any integer >= 2
 
 
@@ -68,11 +66,10 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * np.arcsin(np.sqrt(a))
 
 
-def build_distance_matrix(tracts):
+def build_graph(tracts):
     """
     Build a weighted distance matrix using Delaunay triangulation and Dijkstra shortest paths.
-    Also builds a parallel haversine distance matrix with filtered edges (excluding largest edge per triangle).
-    Returns both distance matrices and tract metadata.
+    Returns the distance matrix and tract metadata.
     """
     geoids = [row['county_geoid'] for row in tracts]
     lats = np.array([row['lat'] for row in tracts])
@@ -80,95 +77,63 @@ def build_distance_matrix(tracts):
     pops = np.array([row['pop'] for row in tracts])
     n = len(tracts)
     
-    print(f"  Building distance matrices for {n} tracts...")
+    print(f"  Building distance matrix for {n} tracts...")
     
     # Transform to Mercator for Delaunay
     transformer = Transformer.from_crs(4326, 3857, always_xy=True)
     xs, ys = transformer.transform(lons, lats)
     coords_merc = np.column_stack([xs, ys])
     
-    # Build Delaunay triangulation (used for both matrices)
-    print("  Computing Delaunay triangulation...")
+    # Build Delaunay triangulation
     tri = Delaunay(coords_merc)
-    
-    # First pass: collect all edges and identify largest edge per triangle
-    print("  Analyzing triangles for edge filtering...")
-    edge_distances = {}  # edge -> haversine distance
-    edges_in_triangles = {}  # triangle_id -> list of (edge, distance)
-    
-    for tri_idx, simplex in enumerate(tqdm(tri.simplices, desc="  Collecting edge distances", unit="triangle", leave=False)):
-        triangle_edges = []
+    edges = set()
+    max_edges = set()
+    # For each triangle, find its longest edge and collect all such edges
+    for simplex in tqdm(tri.simplices, desc="  Building Delaunay edges", unit="triangle", leave=False):
+        tri_edges = []
         for i in range(3):
             a, b = simplex[i], simplex[(i+1)%3]
             edge = tuple(sorted((a, b)))
-            
-            # Calculate haversine distance for this edge (if not already calculated)
-            if edge not in edge_distances:
-                dist = haversine(lats[a], lons[a], lats[b], lons[b])
-                edge_distances[edge] = dist
-            
-            triangle_edges.append((edge, edge_distances[edge]))
-        
-        edges_in_triangles[tri_idx] = triangle_edges
-    
-    # Identify edges to exclude (largest edge in each triangle)
-    excluded_edges = set()
-    for tri_idx, triangle_edges in tqdm(edges_in_triangles.items(), desc="  Finding largest edges to exclude", unit="triangle", leave=False):
-        # Sort edges by distance and exclude the largest
-        triangle_edges.sort(key=lambda x: x[1], reverse=True)
-        largest_edge = triangle_edges[0][0]
-        excluded_edges.add(largest_edge)
-    
-    print(f"  Total Delaunay edges: {len(edge_distances)}")
-    print(f"  Excluded edges (largest per triangle): {len(excluded_edges)}")
-    print(f"  Edges for parallel matrix: {len(edge_distances) - len(excluded_edges)}")
-    
-    # Build weighted graph (uses all Delaunay edges with population weighting)
-    G_weighted = nx.Graph()
+            length = haversine(lats[a], lons[a], lats[b], lons[b])
+            tri_edges.append((length, edge))
+            edges.add(edge)
+        # Find the longest edge in this triangle
+        max_edge = max(tri_edges, key=lambda x: x[0])[1]
+        max_edges.add(max_edge)
+
+    # Build graph with weighted edges, but skip all max edges from triangles
+    G = nx.Graph()
     for i in range(n):
-        G_weighted.add_node(i)
+        G.add_node(i)
+
+    for a, b in tqdm(edges, desc="  Adding weighted edges", unit="edge", leave=False):
+        if (a, b) in max_edges:
+            continue  # skip all triangle max edges to make urquhart graph
+        dist = haversine(lats[a], lons[a], lats[b], lons[b])
+        pop_a = max(float(pops[a]), 1e-9)
+        pop_b = max(float(pops[b]), 1e-9)
+        weight = 1/((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))
+        G.add_edge(a, b, weight=weight)
+
+    w_min = min(d.get('weight') for _, _, d in G.edges(data=True))
+    for u, v, d in G.edges(data=True):
+        scaled = int(np.floor(d['weight'] / w_min))
+        G[u][v]['weight'] = scaled
+
+    xadj = [0]
+    adjncy = []
+    eweights = []
     
-    for edge in tqdm(edge_distances.keys(), desc="  Building weighted graph", unit="edge", leave=False):
-        a, b = edge
-        dist = edge_distances[edge]
-        pop_a = max(pops[a], 1e-9)
-        pop_b = max(pops[b], 1e-9)
-        weight = ((dist / (2 * np.sqrt(pop_a))) + (dist / (2 * np.sqrt(pop_b))))**2
-        G_weighted.add_edge(a, b, weight=weight)
+    for u in list(G.nodes()):
+        start_len = len(adjncy)
+        for v in G.neighbors(u):
+            adjncy.append(v)
+            # Edge weight must be a positive integer for Metis
+            w = G[u][v].get("weight")
+            eweights.append(w)
+        xadj.append(len(adjncy))
     
-    # Build parallel haversine graph (uses filtered edges with pure haversine distances)
-    G_parallel = nx.Graph()
-    for i in range(n):
-        G_parallel.add_node(i)
-    
-    for edge, dist in tqdm(edge_distances.items(), desc="  Building parallel haversine graph", unit="edge", leave=False):
-        if edge not in excluded_edges:
-            a, b = edge
-            G_parallel.add_edge(a, b, weight=dist)
-    
-    # Compute all-pairs shortest paths for weighted matrix
-    print("  Computing shortest paths for weighted distance matrix...")
-    sp_length_weighted = dict(nx.all_pairs_dijkstra_path_length(G_weighted, weight="weight"))
-    dist_matrix = np.zeros((n, n))
-    for i in tqdm(range(n), desc="  Building weighted distance matrix", unit="row", leave=False):
-        for j in range(n):
-            dist_matrix[i, j] = sp_length_weighted[i][j] if j in sp_length_weighted[i] else np.inf
-    
-    # Compute all-pairs shortest paths for parallel matrix
-    print("  Computing shortest paths for parallel distance matrix...")
-    sp_length_parallel = dict(nx.all_pairs_dijkstra_path_length(G_parallel, weight="weight"))
-    parallel_dist_matrix = np.zeros((n, n))
-    for i in tqdm(range(n), desc="  Building parallel distance matrix", unit="row", leave=False):
-        for j in range(n):
-            parallel_dist_matrix[i, j] = sp_length_parallel[i][j] if j in sp_length_parallel[i] else np.inf
-    
-    # Diagnostic output
-    max_dist_weighted = np.nanmax(dist_matrix[~np.isinf(dist_matrix)]) if np.any(~np.isinf(dist_matrix)) else 0
-    max_dist_parallel = np.nanmax(parallel_dist_matrix[~np.isinf(parallel_dist_matrix)]) if np.any(~np.isinf(parallel_dist_matrix)) else 0
-    print(f"  Max finite distance in weighted matrix: {max_dist_weighted:.2e}")
-    print(f"  Max finite distance in parallel matrix: {max_dist_parallel:.2e}")
-    
-    return dist_matrix, parallel_dist_matrix, geoids, lats, lons, pops
+    return geoids, lats, lons, pops, G, xadj, adjncy, eweights, pops
 
 
 def find_best_medoid(cluster_indices, dist_matrix):
@@ -186,16 +151,17 @@ def find_best_medoid(cluster_indices, dist_matrix):
     return best_idx
 
 
-def recursive_split(tract_indices, dist_matrix, parallel_dist_matrix, geoids, pops, n_districts, total_pop, cluster_name, all_results):
+def recursive_split(tract_indices, dist_matrix, geoids, pops, lats, lons, n_districts, total_pop, cluster_name, all_results, graph):
     """
     Recursively split tracts into districts using binary K-Medoids.
-    
+
     Parameters:
     - tract_indices: list of indices (into dist_matrix) for tracts in this cluster
-    - dist_matrix: full weighted distance matrix for all tracts (used for K-Medoids)
-    - parallel_dist_matrix: parallel haversine distance matrix (used for rebalancing)
+    - dist_matrix: full distance matrix for all tracts (computed once at the top level)
     - geoids: list of all tract geoids
     - pops: array of all tract populations
+    - lats: array of all tract latitudes
+    - lons: array of all tract longitudes
     - n_districts: number of districts this cluster should be split into (>= 2)
     - total_pop: total population of all input tracts (for calculating target district size)
     - cluster_name: string identifier for this cluster (e.g., "", "0", "01", etc.)
@@ -204,8 +170,10 @@ def recursive_split(tract_indices, dist_matrix, parallel_dist_matrix, geoids, po
     n_tracts = len(tract_indices)
     cluster_pop = sum(pops[i] for i in tract_indices)
     
+    split_start = time.time()
+
     print(f"[Split] Cluster '{cluster_name}' has {n_tracts} tracts, pop={cluster_pop:.0f}, target={n_districts} districts")
-    
+
     if n_tracts < 2:
         # Base case: only one tract, assign it
         idx = tract_indices[0]
@@ -216,21 +184,21 @@ def recursive_split(tract_indices, dist_matrix, parallel_dist_matrix, geoids, po
             'medioid': True  # Single tract is its own medoid
         })
         return
-    
-    # Extract submatrix for this cluster (use weighted distance for K-Medoids)
+
+    # Extract submatrix for this cluster
     sub_matrix = dist_matrix[np.ix_(tract_indices, tract_indices)]
-    
+
     # Run K-Medoids with k=2 to split into two clusters
     kmedoids = KMedoids(n_clusters=2, metric="precomputed", init="k-medoids++")
     sub_labels = kmedoids.fit_predict(sub_matrix)
-    
+
     # Map back to original indices
     cluster_0_indices = [tract_indices[i] for i in range(n_tracts) if sub_labels[i] == 0]
     cluster_1_indices = [tract_indices[i] for i in range(n_tracts) if sub_labels[i] == 1]
-    
+
     pop_0 = sum(pops[i] for i in cluster_0_indices)
     pop_1 = sum(pops[i] for i in cluster_1_indices)
-    
+
     # Label the smaller cluster as t_0, larger as t_1
     if pop_0 <= pop_1:
         t_0_indices = cluster_0_indices
@@ -242,16 +210,17 @@ def recursive_split(tract_indices, dist_matrix, parallel_dist_matrix, geoids, po
         t_1_indices = cluster_0_indices
         p_0 = pop_1
         p_1 = pop_0
-    
+
     cn_0 = cluster_name + "0"
     cn_1 = cluster_name + "1"
-    
+
     print(f"  Initial split: cluster {cn_0} pop={p_0:.0f}, cluster {cn_1} pop={p_1:.0f}")
 
     # Rebalancing step
     # Target district population
     target_district_pop = total_pop / n_districts
-    
+
+    # do not remove the below comment
     # Check if p_0 needs rebalancing
     # "until p_0 reaches at or beyond the next mod (p_t/n)" means:
     # We want p_0 to be a multiple of target_district_pop.
@@ -271,24 +240,29 @@ def recursive_split(tract_indices, dist_matrix, parallel_dist_matrix, geoids, po
 
     if p_0 % target_district_pop != 0 or p_0 == 0:
         next_multiple = (np.floor(p_0 / target_district_pop)+1) * target_district_pop
-        
-        # Find medoids for both clusters (using weighted distance matrix)
+        adjacent_indices = {u for u in t_1_indices if any(v in t_0_indices for v in graph.neighbors(u))} #https://chatgpt.com/s/t_68f9acc4b1188191830c128f76c4373e
+
+        # Find medoids for both clusters
         m_0_idx = find_best_medoid(t_0_indices, dist_matrix)
         m_1_idx = find_best_medoid(t_1_indices, dist_matrix)
 
-        # Calculate d_0 for all tracts in t_1 using PARALLEL distance matrix
-        # We want to transfer tracts closest to cluster 0's medoid by haversine distance
-        distances = []
+        # Calculate d_0 and d_1 for all tracts in t_1
+        ratios = []
         for idx in t_1_indices:
-            d_0 = parallel_dist_matrix[idx, m_0_idx]  # Use parallel matrix for rebalancing
-            distances.append((d_0, idx))
+            d_0 = dist_matrix[idx, m_0_idx]
+            d_1 = dist_matrix[idx, m_1_idx]
+            # if d_0 > 0: 
+            r_1 = (d_1 + d_0) * (d_1/d_0)
+            # else:
+            #     r_1 = 0 if d_1 == 0 else np.inf
+            ratios.append((r_1, idx))
 
-        # Sort by d_0 ascending (lowest d_0 = closest to m_0 by haversine)
-        distances.sort()
+        # Sort by r_1 descending (highest r_1 = closest to m_0 relative to m_1)
+        ratios.sort(reverse=True)
 
         # Transfer tracts from t_1 to t_0 until p_0 reaches the next multiple
         transferred = []
-        for d_0, idx in distances:
+        for r_1, idx in ratios:
             if p_0 >= next_multiple:
                 break
             transferred.append(idx)
@@ -301,18 +275,21 @@ def recursive_split(tract_indices, dist_matrix, parallel_dist_matrix, geoids, po
             t_1_indices = [idx for idx in t_1_indices if idx not in transferred]
             print(f"  Rebalanced: transferred {len(transferred)} tracts from {cn_1} to {cn_0}")
             print(f"  After rebalancing: {cn_0} pop={p_0:.0f}, {cn_1} pop={p_1:.0f}")
-    
+
     # Determine how many districts each cluster should contain
-    # Round to nearest integer based on population proportion
     n_0 = round(p_0 / target_district_pop)
     n_1 = round(p_1 / target_district_pop)
-    
+
     # Ensure at least 1 district per cluster if it has tracts
     n_0 = max(1, n_0) if t_0_indices else 0
     n_1 = max(1, n_1) if t_1_indices else 0
 
     print(f"  Cluster {cn_0} will have {n_0} districts, cluster {cn_1} will have {n_1} districts")
+
+    split_elapsed = time.time() - split_start
     
+    print(f"  Split completed in {split_elapsed:.2f} seconds.")
+
     # Process each cluster
     for cluster_indices, cluster_pop, cluster_n, cluster_name_new in [
         (t_0_indices, p_0, n_0, cn_0),
@@ -332,65 +309,149 @@ def recursive_split(tract_indices, dist_matrix, parallel_dist_matrix, geoids, po
                     'medioid': (idx == medoid_idx)
                 })
         else:
-            # This cluster needs further splitting
-            recursive_split(cluster_indices, dist_matrix, parallel_dist_matrix, geoids, pops, cluster_n, cluster_pop, cluster_name_new, all_results)
+            # This cluster needs further splitting - rebuild distance matrix for this cluster
+            cluster_tracts = [
+                {'county_geoid': geoids[i], 'lat': lats[i], 'lon': lons[i], 'pop': pops[i]}
+                for i in cluster_indices
+            ]
+            cluster_dist_matrix, cluster_geoids, cluster_lats, cluster_lons, cluster_pops, _graph = build_distance_matrix(cluster_tracts)
+            # Create new indices for the cluster (0 to n-1)
+            cluster_tract_indices = list(range(len(cluster_indices)))
+            recursive_split(cluster_tract_indices, cluster_dist_matrix, cluster_geoids, cluster_pops, cluster_lats, cluster_lons, cluster_n, cluster_pop, cluster_name_new, all_results, graph)
+        
 
 
 def insert_districts(assignments):
     """Insert district assignments into the database."""
-    print(f"\n[Insert] Inserting {len(assignments)} tract assignments into {DISTRICT_TABLE}...")
+    print(f"\n[Insert] Inserting {len(assignments)} tract assignments into {DISTRICT_TABLE}...") # in the future i may want to insert a medioid again
     with psycopg2.connect(**DB_CRED) as conn, conn.cursor() as cur:
-        for row in tqdm(assignments, desc="Inserting", unit="tract"):
+        for k, v in assignments.items():
             cur.execute(f"""
                 INSERT INTO {SCHEMA}.{DISTRICT_TABLE} (geoid, type, parent, medioid)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (geoid) DO UPDATE
                 SET parent = EXCLUDED.parent, medioid = EXCLUDED.medioid, type = EXCLUDED.type;
-            """, (row['geoid'], row['type'], row['parent'], row['medioid']))
+            """, (k, "11", v, False))
         conn.commit()
     print("Insert complete.")
 
 
+def assign_zero_pop_tracts(zero_pop_tracts, assigned_tracts, dist_matrix, geoids):
+    """Assign zero-population tracts to their nearest assigned tract's district.
+
+    - zero_pop_tracts: list of tract dicts from DB (with 'county_geoid')
+    - assigned_tracts: list of assignment dicts returned by recursive_split (with 'geoid' and 'parent')
+    - dist_matrix, geoids: full distance matrix and corresponding geoids
+    """
+    if not zero_pop_tracts:
+        return []
+
+    geoid_to_idx = {g: i for i, g in enumerate(geoids)}
+    # Map assigned geoid -> parent district
+    geoid_to_parent = {a['geoid']: a['parent'] for a in assigned_tracts}
+
+    assignments = []
+    for tract in tqdm(zero_pop_tracts, desc="  Assigning zero-pop tracts", unit="tract", leave=False):
+        zg = tract['county_geoid']
+        if zg not in geoid_to_idx:
+            continue
+        zi = geoid_to_idx[zg]
+        # find nearest assigned tract
+        min_d = np.inf
+        nearest_parent = None
+        for a in assigned_tracts:
+            ag = a['geoid']
+            if ag not in geoid_to_idx:
+                continue
+            ai = geoid_to_idx[ag]
+            d = dist_matrix[zi, ai]
+            if d < min_d:
+                min_d = d
+                nearest_parent = a['parent']
+        if nearest_parent is not None:
+            assignments.append({
+                'geoid': zg,
+                'type': '11',
+                'parent': nearest_parent,
+                'medioid': False
+            })
+    return assignments
+
+
 def main():
     total_start = time.time()
-    
+
     print(f"=== New York State Congressional District Assignment ===")
     print(f"Target: {N_DISTRICTS} districts\n")
-    
+
     # Create table
     create_district_table()
-    
+
     # Fetch all NY tract centroids
     print("[Step 1] Fetching tract centroids for New York State (FIPS 36)...")
-    tracts = fetch_ny_tract_centroids()
-    print(f"  Found {len(tracts)} tracts")
-    
-    if len(tracts) == 0:
+    all_tracts = fetch_ny_tract_centroids()
+    print(f"  Found {len(all_tracts)} tracts")
+
+    if len(all_tracts) == 0:
         print("No tracts found. Exiting.")
         return
-    
-    total_pop = sum(row['pop'] for row in tracts)
-    print(f"  Total population: {total_pop:.0f}")
+
+    # Separate zero-population tracts from populated tracts
+    zero_pop_tracts = [t for t in all_tracts if t.get('pop', 0) == 0]
+    populated_tracts = [t for t in all_tracts if t.get('pop', 0) > 0]
+
+    print(f"  Zero-population tracts: {len(zero_pop_tracts)}")
+    print(f"  Populated tracts: {len(populated_tracts)}")
+
+    if len(populated_tracts) == 0:
+        print("No populated tracts found. Exiting.")
+        return
+
+    total_pop = sum(t['pop'] for t in populated_tracts)
+    print(f"  Total population (populated tracts): {total_pop:.0f}")
     print(f"  Target district population: {total_pop / N_DISTRICTS:.0f}\n")
-    
-    # Build distance matrices (computed once, reused throughout recursion)
-    print("[Step 2] Building distance matrices...")
-    dist_matrix, parallel_dist_matrix, geoids, lats, lons, pops = build_distance_matrix(tracts)
+
+    # Build distance matrix for populated tracts only
+    print("[Step 2] Building graph for populated tracts...")
+    geoids, lats, lons, pops, graph, xadj, adjncy, eweights, vweights = build_graph(populated_tracts)
     print()
-    
-    # Run recursive splitting
-    print("[Step 3] Running recursive K-Medoids clustering...")
-    all_tract_indices = list(range(len(tracts)))
-    results = []
-    recursive_split(all_tract_indices, dist_matrix, parallel_dist_matrix, geoids, pops, N_DISTRICTS, total_pop, "", results)
-    print(f"\n  Total tracts assigned: {len(results)}")
-    
-    # Insert into database
-    print("\n[Step 4] Inserting results into database...")
-    insert_districts(results)
-    
-    total_elapsed = time.time() - total_start
-    print(f"\n=== Complete in {total_elapsed:.2f} seconds ===")
+
+    # Save the full distance matrix and geoids for all tracts (populated and zero-pop)
+    # This is used for nearest neighbor assignment for zero-pop tracts
+    all_geoids = geoids
+
+    cut_cost, parts = pymetis.part_graph(
+        nparts=N_DISTRICTS,
+        xadj=xadj,
+        adjncy=adjncy,
+        vweights=vweights,
+        eweights=eweights,
+        contiguous=True,      # ensure each district is contiguous #todo DeprecationWarning
+        recursive=False       # k-way (default); set True to try recursive bisection
+    )
+
+    # Map back to node labels
+    part_of = {u: p for u, p in zip(geoids, parts)}
+    # return cut_cost, part_of
+
+    # Run recursive splitting on populated tracts only
+    print("[Step 3] Print output")
+    print(f"\n  {part_of}")
+    # 
+    # # If there are zero-pop tracts, assign them using the original distance matrix and geoids
+    # all_results = results
+    # if zero_pop_tracts:
+    #     print(f"\n[Step 4] Assigning {len(zero_pop_tracts)} zero-population tracts to nearest neighbors...")
+    #     # Use the original distance matrix and geoids for nearest neighbor assignment
+    #     zero_assign = assign_zero_pop_tracts(zero_pop_tracts, results, all_dist_matrix, all_geoids)
+    #     all_results = results + zero_assign
+    # 
+    # Insert all assignments into DB
+    print(f"\n[Step 4] Inserting {len(part_of)} tract assignments into database...")
+    insert_districts(part_of)
+    # 
+    # total_elapsed = time.time() - total_start
+    # print(f"\n=== Complete in {total_elapsed:.2f} seconds ===")
 
 
 if __name__ == "__main__":
