@@ -252,6 +252,49 @@ def main():
             
             print(f"\nNew child level will be: {new_level}")
             
+            # Check if parent record has population, if not calculate from blocks
+            if not parent_record.get('pop') or parent_record['pop'] == 0:
+                print("\nParent record has no population. Calculating from blocks...")
+                
+                # Get parent geometry
+                cur.execute(f"SELECT ST_AsBinary(geom) FROM {SCHEMA}.{HLL_TABLE} WHERE id = %s;", (parent_id,))
+                parent_geom_row = cur.fetchone()
+                if not parent_geom_row or not parent_geom_row['st_asbinary']:
+                    print("Could not fetch parent geometry. Exiting.")
+                    return
+                
+                parent_geom_wkb = parent_geom_row['st_asbinary']
+                
+                # Sum population from blocks within parent geometry
+                cur.execute(f"""
+                    SELECT COALESCE(SUM(pop20), 0) AS total_pop
+                    FROM {SCHEMA}.{BLOCKS_TABLE}
+                    WHERE ST_Within(geom, ST_GeomFromWKB(%s, 4269));
+                """, (parent_geom_wkb,))
+                
+                pop_result = cur.fetchone()
+                calculated_pop = int(pop_result['total_pop'])
+                
+                print(f"Calculated population from blocks: {calculated_pop}")
+                
+                # Update parent record with calculated population
+                cur.execute(f"""
+                    UPDATE {SCHEMA}.{HLL_TABLE}
+                    SET pop = %s
+                    WHERE id = %s;
+                """, (calculated_pop, parent_id))
+                
+                conn.commit()
+                print("Updated parent record with calculated population.")
+                
+                # Re-fetch parent record with updated population
+                parent_record = get_record(cur, parent_id)
+                if not parent_record:
+                    print(f"Could not re-fetch parent record after update. Exiting.")
+                    return
+                
+                print(f"Updated parent population: {parent_record['pop']}")
+            
             # Step 2: Select centroid level
             print("\nStep 2: Select centroid level")
             centroid_level = inquirer.select(

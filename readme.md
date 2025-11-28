@@ -23,6 +23,8 @@ DB_CRED = {
 
 Ther should also be the following Databases existing. You will need to download and import Tiger and population data for blocks, block groups, tracts, and counties within the USA.
 
+**Info:** the imported TIGER data will require about 12GB of free space.
+
 ### DDL
 
 #### Block Table
